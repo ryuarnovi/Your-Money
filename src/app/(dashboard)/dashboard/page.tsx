@@ -101,21 +101,15 @@ export default function DashboardPage() {
     async function fetchData() {
       setLoading(true);
       try {
-        const [statsData, txData, budgetData, goalData, billData, catData] = await Promise.all([
-          getDashboardStatsAction(),
-          getRecentTransactionsAction(8),
-          getActiveBudgetsAction(),
-          getSavingGoalsAction(),
-          getUpcomingBillsAction(7),
-          getCategoryBreakdownAction("expense"),
-        ]);
+        const { getDashboardCombinedAction } = await import("@/actions/transaction.actions");
+        const combined = await getDashboardCombinedAction();
 
-        setStats(statsData);
-        setRecentTx(txData as Transaction[]);
-        setBudgets(budgetData as BudgetItem[]);
-        setGoals(goalData as SavingGoalItem[]);
-        setBills(billData as BillItem[]);
-        setExpenseCategories(catData as CategoryItem[]);
+        setStats(combined.stats);
+        setRecentTx(combined.recentTx as Transaction[]);
+        setBudgets(combined.budgets as BudgetItem[]);
+        setGoals(combined.savingGoals as SavingGoalItem[]);
+        setBills(combined.bills as BillItem[]);
+        setExpenseCategories(combined.expenseCategories as CategoryItem[]);
       } catch (error) {
         console.error("Failed to fetch dashboard data:", error);
       } finally {

@@ -49,9 +49,9 @@ export async function executeQuery<T = Record<string, unknown>>(
   return result.data!;
 }
 
-export async function executeBatch(
+export async function executeBatch<T = Record<string, unknown>>(
   queries: { sql: string; params?: unknown[] }[]
-): Promise<void> {
+): Promise<QueryResult<T>[]> {
   const response = await fetch(`${WORKER_API_URL}/api/batch`, {
     method: "POST",
     headers: {
@@ -66,6 +66,13 @@ export async function executeBatch(
     const error = await response.text();
     throw new Error(`Batch query failed: ${error}`);
   }
+
+  const result = await response.json();
+  if (!result.success) {
+    throw new Error(result.error || "Batch query failed");
+  }
+
+  return result.data;
 }
 
 // Helper for single row queries
