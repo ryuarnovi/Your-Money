@@ -125,22 +125,30 @@ bot.on("message:text", async (ctx) => {
   const userId = await getUserIdByChatId(chatId);
   if (!userId) return ctx.reply("⚠️ Akun Telegram belum terhubung dengan DuitKu.");
 
-  // Regex pattern for +amount category or -amount category
-  const match = text.match(/^([+-])(\d+)\s*(.*)$/);
+  // Regex pattern for +amount category or -amount category (supports dots/commas e.g. -40.000 transport)
+  const match = text.match(/^([+-])([0-9.,\s]+?)\s+(.*)$/);
   if (!match) {
     return ctx.reply(
-      "Format tidak dikenali. Gunakan contoh:\n`+500000 Gaji` atau `-25000 Makan`",
+      "Format tidak dikenali. Gunakan contoh:\n`+500.000 Gaji` atau `-40.000 Transport`",
       { parse_mode: "Markdown" }
     );
   }
 
   const sign = match[1];
-  const amount = Number(match[2]);
-  const categoryRaw = match[3].trim() || "Lainnya";
+  const rawAmountStr = match[2].replace(/[^0-9]/g, "");
+  const amount = Number(rawAmountStr);
+
+  if (!amount || isNaN(amount)) {
+    return ctx.reply("⚠️ Nominal angka tidak valid.");
+  }
+
+  const fullDesc = match[3].trim();
+  // Clean category search string (e.g. 'transport(pengeluaran)' -> 'transport')
+  const cleanCategorySearch = fullDesc.replace(/\(.*?\)/g, "").trim() || fullDesc;
   const type = sign === "+" ? "income" : "expense";
 
   // Find category
-  const cat = await findCategoryByName(categoryRaw, type);
+  const cat = await findCategoryByName(cleanCategorySearch, type);
   const categoryId = cat?.id;
 
   try {
@@ -150,7 +158,7 @@ bot.on("message:text", async (ctx) => {
       type,
       categoryId,
       paymentMethod: "cash",
-      description: `Input via Telegram: ${categoryRaw}`,
+      description: fullDesc,
       date: new Date(),
     });
 
@@ -158,7 +166,8 @@ bot.on("message:text", async (ctx) => {
       `✅ *Transaksi Berhasil Dicatat*!\n\n` +
       `• Jenis: ${type === "income" ? "Pemasukan 🟢" : "Pengeluaran 🔴"}\n` +
       `• Nominal: *${formatCurrency(amount)}*\n` +
-      `• Kategori: *${cat?.name || categoryRaw}*`,
+      `• Kategori: *${cat?.name || cleanCategorySearch}*\n` +
+      `• Keterangan: _${fullDesc}_`,
       { parse_mode: "Markdown" }
     );
   } catch (error) {
