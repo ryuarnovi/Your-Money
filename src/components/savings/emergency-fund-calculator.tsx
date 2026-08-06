@@ -86,7 +86,7 @@ export function EmergencyFundCalculator({
               value={maritalStatus}
               onValueChange={(val) => val && setMaritalStatus(val as any)}
             >
-              <SelectTrigger id="maritalStatus">
+              <SelectTrigger id="maritalStatus" className="w-full h-9">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
