@@ -8,7 +8,12 @@ export async function POST(req: NextRequest) {
     // Verify secret token from Telegram
     const secret = req.headers.get("x-telegram-bot-api-secret-token");
     if (secret && process.env.TELEGRAM_WEBHOOK_SECRET && secret !== process.env.TELEGRAM_WEBHOOK_SECRET) {
+      console.warn("Telegram secret mismatch:", { secret, expected: process.env.TELEGRAM_WEBHOOK_SECRET });
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!bot.isInited()) {
+      await bot.init();
     }
 
     // Process update via grammY
@@ -17,6 +22,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("Telegram webhook error:", error);
-    return NextResponse.json({ ok: false, error: "Internal error" }, { status: 500 });
+    return NextResponse.json({ ok: false, error: String(error) }, { status: 500 });
   }
 }

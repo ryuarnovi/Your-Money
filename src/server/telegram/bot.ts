@@ -8,6 +8,10 @@ import { formatCurrency, formatDate } from "@/utils";
 const token = process.env.TELEGRAM_BOT_TOKEN || "DEFAULT_TOKEN";
 export const bot = new Bot(token);
 
+bot.catch((err) => {
+  console.error("Grammy error handled:", err.error);
+});
+
 // Helper to get linked user for a chat ID
 async function getUserIdByChatId(chatId: string): Promise<string | null> {
   const row = await queryOne<{ user_id: string }>(
