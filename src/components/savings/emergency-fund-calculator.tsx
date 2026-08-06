@@ -25,6 +25,10 @@ export function EmergencyFundCalculator({
 
   // Recommended months multiplier based on status
   const recommendedMonths = maritalStatus === "single" ? 6 : maritalStatus === "married" ? 9 : 12;
+  const [selectedMonths, setSelectedMonths] = useState<number>(6);
+
+  // Auto set active selected target when status changes
+  const activeMonths = selectedMonths || recommendedMonths;
 
   const targets = {
     3: monthlyExpense * 3,
@@ -33,9 +37,9 @@ export function EmergencyFundCalculator({
     12: monthlyExpense * 12,
   };
 
-  const targetRecommended = monthlyExpense * recommendedMonths;
-  const progressPercent = Math.min(100, Math.round((savedAmount / targetRecommended) * 100));
-  const remainingRecommended = Math.max(0, targetRecommended - savedAmount);
+  const targetSelected = monthlyExpense * activeMonths;
+  const progressPercent = Math.min(100, Math.round((savedAmount / targetSelected) * 100));
+  const remainingSelected = Math.max(0, targetSelected - savedAmount);
 
   return (
     <Card className="border-border/50 bg-card/80 backdrop-blur-sm relative overflow-hidden">
@@ -78,7 +82,13 @@ export function EmergencyFundCalculator({
             </Label>
             <Select
               value={maritalStatus}
-              onValueChange={(val) => val && setMaritalStatus(val as any)}
+              onValueChange={(val) => {
+                if (val) {
+                  setMaritalStatus(val as any);
+                  const rec = val === "single" ? 6 : val === "married" ? 9 : 12;
+                  setSelectedMonths(rec);
+                }
+              }}
             >
               <SelectTrigger id="maritalStatus" className="w-full h-9">
                 <SelectValue />
@@ -103,13 +113,13 @@ export function EmergencyFundCalculator({
           </div>
         </div>
 
-        {/* Progress Bar for Recommended Target */}
+        {/* Progress Bar for Selected Target */}
         <div className="p-4 rounded-xl bg-accent/40 border border-border/50 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-emerald-500" />
               <span className="text-sm font-semibold">
-                Target Ideal ({recommendedMonths} Bulan): {formatCurrency(targetRecommended)}
+                Target Dana Darurat ({activeMonths} Bulan): {formatCurrency(targetSelected)}
               </span>
             </div>
             <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
@@ -121,13 +131,14 @@ export function EmergencyFundCalculator({
 
           <div className="flex justify-between items-center text-xs text-muted-foreground">
             <span>Terkumpul: {formatCurrency(savedAmount)}</span>
-            <span>Kurang: {formatCurrency(remainingRecommended)}</span>
+            <span>Sisa Kurang: {formatCurrency(remainingSelected)}</span>
           </div>
         </div>
 
         {/* Breakdown 3, 6, 9, 12 Months */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {([3, 6, 9, 12] as const).map((months) => {
+            const isSelected = months === activeMonths;
             const isRecommended = months === recommendedMonths;
             const targetVal = targets[months];
             const isAchieved = savedAmount >= targetVal;
@@ -135,10 +146,11 @@ export function EmergencyFundCalculator({
             return (
               <div
                 key={months}
-                className={`p-3.5 rounded-xl border transition-all ${
-                  isRecommended
-                    ? "border-emerald-500/50 bg-emerald-500/5 shadow-sm"
-                    : "border-border/40 bg-card/40"
+                onClick={() => setSelectedMonths(months)}
+                className={`p-3.5 rounded-xl border transition-all cursor-pointer select-none ${
+                  isSelected
+                    ? "border-emerald-500 bg-emerald-500/10 shadow-md ring-2 ring-emerald-500/30"
+                    : "border-border/40 bg-card/40 hover:border-emerald-500/40 hover:bg-emerald-500/5"
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
@@ -147,7 +159,7 @@ export function EmergencyFundCalculator({
                   </span>
                   {isRecommended && (
                     <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium px-1.5 py-0.5 rounded-full">
-                      Ideal
+                      Rekomendasi
                     </span>
                   )}
                 </div>
@@ -157,11 +169,11 @@ export function EmergencyFundCalculator({
                 <div className="mt-2 flex items-center gap-1 text-[11px]">
                   {isAchieved ? (
                     <span className="text-emerald-500 font-medium flex items-center gap-1">
-                      <ShieldCheck className="h-3 w-3" /> Aman
+                      <ShieldCheck className="h-3 w-3" /> Terpenuhi
                     </span>
                   ) : (
                     <span className="text-amber-500 font-medium flex items-center gap-1">
-                      <ShieldAlert className="h-3 w-3" /> Sisa {formatCompactCurrency(targetVal - savedAmount)}
+                      <ShieldAlert className="h-3 w-3" /> Kurang {formatCompactCurrency(targetVal - savedAmount)}
                     </span>
                   )}
                 </div>

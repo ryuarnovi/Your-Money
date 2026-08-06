@@ -18,6 +18,7 @@ import {
 } from "@/actions/crud.actions";
 import { getDashboardStatsAction } from "@/actions/transaction.actions";
 import { EmergencyFundCalculator } from "@/components/savings/emergency-fund-calculator";
+import { MoneyInput } from "@/components/ui/money-input";
 import { toast } from "sonner";
 
 interface SavingGoal {
@@ -144,13 +145,11 @@ export default function SavingsPage() {
           </p>
         </div>
 
+        <Button className="gap-2" onClick={() => setOpenCreate(true)}>
+          <Plus className="h-4 w-4" />
+          Target Baru
+        </Button>
         <Dialog open={openCreate} onOpenChange={setOpenCreate}>
-          <DialogTrigger>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Target Baru
-            </Button>
-          </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Buat Target Tabungan Baru</DialogTitle>
@@ -165,21 +164,19 @@ export default function SavingsPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Target Jumlah (Rp)</Label>
-                <Input
-                  type="number"
-                  placeholder="10000000"
+                <Label>Target Jumlah</Label>
+                <MoneyInput
+                  placeholder="10.000.000"
                   value={targetAmount}
-                  onChange={(e) => setTargetAmount(e.target.value)}
+                  onValueChange={(val) => setTargetAmount(String(val))}
                 />
               </div>
               <div className="space-y-2">
-                <Label>Jumlah Awal Terkumpul (Rp)</Label>
-                <Input
-                  type="number"
+                <Label>Jumlah Awal Terkumpul</Label>
+                <MoneyInput
                   placeholder="0"
                   value={currentAmount}
-                  onChange={(e) => setCurrentAmount(e.target.value)}
+                  onValueChange={(val) => setCurrentAmount(String(val))}
                 />
               </div>
             </div>
@@ -255,27 +252,30 @@ export default function SavingsPage() {
                         <CheckCircle2 className="h-3.5 w-3.5" /> Selesai!
                       </span>
                     ) : (
-                      <Dialog
-                        open={openDeposit === goal.id}
-                        onOpenChange={(open) => setOpenDeposit(open ? goal.id : null)}
-                      >
-                        <DialogTrigger>
-                          <Button size="sm" variant="outline" className="h-7 text-xs">
-                            <Plus className="h-3 w-3 mr-1" /> Nabung
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={() => setOpenDeposit(goal.id)}
+                        >
+                          <Plus className="h-3 w-3 mr-1" /> Nabung
+                        </Button>
+                        <Dialog
+                          open={openDeposit === goal.id}
+                          onOpenChange={(open) => setOpenDeposit(open ? goal.id : null)}
+                        >
+                          <DialogContent>
                           <DialogHeader>
                             <DialogTitle>Setor Tabungan - {goal.name}</DialogTitle>
                           </DialogHeader>
                           <div className="space-y-4 py-2">
                             <div className="space-y-2">
-                              <Label>Nominal Setoran (Rp)</Label>
-                              <Input
-                                type="number"
-                                placeholder="500000"
+                              <Label>Nominal Setoran</Label>
+                              <MoneyInput
+                                placeholder="500.000"
                                 value={depositAmount}
-                                onChange={(e) => setDepositAmount(e.target.value)}
+                                onValueChange={(val) => setDepositAmount(String(val))}
                               />
                             </div>
                           </div>
@@ -283,7 +283,8 @@ export default function SavingsPage() {
                             <Button onClick={() => handleDeposit(goal.id)}>Setor</Button>
                           </DialogFooter>
                         </DialogContent>
-                      </Dialog>
+                        </Dialog>
+                      </>
                     )}
                   </div>
                 </CardContent>
