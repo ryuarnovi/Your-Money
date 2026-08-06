@@ -20,6 +20,7 @@ import {
   deleteTransactionAction,
 } from "@/actions/transaction.actions";
 import { getCategoriesAction } from "@/actions/crud.actions";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 
@@ -235,18 +236,17 @@ export default function TransactionsPage() {
 
                 <div className="space-y-2">
                   <Label>Kategori</Label>
-                  <Select value={categoryId} onValueChange={(val) => val && setCategoryId(val)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Pilih Kategori" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {filteredCategories.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    options={filteredCategories.map((c) => ({
+                      value: c.id,
+                      label: c.name,
+                      color: (c as any).color,
+                    }))}
+                    value={categoryId}
+                    onValueChange={setCategoryId}
+                    placeholder="Cari & Pilih Kategori"
+                    searchPlaceholder="Ketik untuk mencari..."
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -326,18 +326,17 @@ export default function TransactionsPage() {
 
             <div className="space-y-2">
               <Label>Kategori</Label>
-              <Select value={categoryId} onValueChange={(val) => val && setCategoryId(val)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Pilih Kategori" />
-                </SelectTrigger>
-                <SelectContent>
-                  {filteredCategories.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={filteredCategories.map((c) => ({
+                  value: c.id,
+                  label: c.name,
+                  color: (c as any).color,
+                }))}
+                value={categoryId}
+                onValueChange={setCategoryId}
+                placeholder="Cari & Pilih Kategori"
+                searchPlaceholder="Ketik untuk mencari..."
+              />
             </div>
 
             <div className="space-y-2">

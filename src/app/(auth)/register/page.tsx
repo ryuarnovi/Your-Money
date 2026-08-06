@@ -58,8 +58,8 @@ export default function RegisterPage() {
       >
         <Card className="border-border/50 bg-card/80 backdrop-blur-xl shadow-2xl">
           <CardHeader className="text-center pb-2">
-            <div className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center mb-4 shadow-lg shadow-purple-500/25">
-              <DollarSign className="w-7 h-7 text-white" />
+            <div className="mx-auto w-14 h-14 rounded-2xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 flex items-center justify-center mb-4 shadow-xl border border-border/40">
+              <DollarSign className="w-7 h-7" />
             </div>
             <CardTitle className="text-2xl font-bold">Buat Akun DuitKu</CardTitle>
             <CardDescription>

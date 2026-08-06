@@ -72,8 +72,8 @@ export function AppSidebar() {
       >
         {/* Logo */}
         <div className="flex items-center gap-3 px-4 h-16 border-b border-border/50">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-            <DollarSign className="w-5 h-5 text-white" />
+          <div className="w-9 h-9 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 flex items-center justify-center flex-shrink-0 shadow-md">
+            <DollarSign className="w-5 h-5" />
           </div>
           <AnimatePresence>
             {!collapsed && (
@@ -209,7 +209,7 @@ export function AppSidebar() {
               <div className="flex items-center gap-3 w-full px-2 py-2 rounded-xl hover:bg-accent transition-colors cursor-pointer">
                 <Avatar className="h-9 w-9 flex-shrink-0">
                   <AvatarImage src={session?.user?.image || ""} />
-                  <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-xs">
+                  <AvatarFallback className="bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-xs font-semibold">
                     {getInitials(session?.user?.name || "U")}
                   </AvatarFallback>
                 </Avatar>
@@ -279,8 +279,8 @@ function MobileHeader() {
         </SheetTrigger>
         <SheetContent side="left" className="w-72 p-0">
           <div className="flex items-center gap-3 px-4 h-16 border-b border-border/50">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-              <DollarSign className="w-5 h-5 text-white" />
+            <div className="w-9 h-9 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 flex items-center justify-center shadow-md">
+              <DollarSign className="w-5 h-5" />
             </div>
             <span className="font-bold text-lg tracking-tight">DuitKu</span>
           </div>

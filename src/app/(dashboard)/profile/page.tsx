@@ -89,7 +89,7 @@ export default function ProfilePage() {
           <div className="flex items-center gap-4 mb-4">
             <Avatar className="h-16 w-16">
               <AvatarImage src={session?.user?.image || ""} />
-              <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-lg font-bold">
+              <AvatarFallback className="bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-lg font-bold">
                 {getInitials(session?.user?.name || "U")}
               </AvatarFallback>
             </Avatar>
