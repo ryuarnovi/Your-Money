@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress";
 import { ShieldAlert, ShieldCheck, Calculator, Sparkles, TrendingUp } from "lucide-react";
 import { formatCurrency, formatCompactCurrency } from "@/utils";
+import { MoneyInput } from "@/components/ui/money-input";
 
 interface EmergencyFundProps {
   avgMonthlyExpense: number;
@@ -59,18 +60,11 @@ export function EmergencyFundCalculator({
             <Label htmlFor="monthlyExpense" className="text-xs">
               Estimasi Pengeluaran / Bulan
             </Label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">
-                Rp
-              </span>
-              <Input
-                id="monthlyExpense"
-                type="number"
-                value={monthlyExpense || ""}
-                onChange={(e) => setMonthlyExpense(Number(e.target.value))}
-                className="pl-9"
-              />
-            </div>
+            <MoneyInput
+              id="monthlyExpense"
+              value={monthlyExpense}
+              onValueChange={setMonthlyExpense}
+            />
             {avgMonthlyExpense > 0 && (
               <p className="text-[11px] text-muted-foreground">
                 Rata-rata saat ini: <span className="font-medium text-foreground">{formatCompactCurrency(avgMonthlyExpense)}</span>
@@ -101,18 +95,11 @@ export function EmergencyFundCalculator({
             <Label htmlFor="savedAmount" className="text-xs">
               Dana Darurat Terkumpul
             </Label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">
-                Rp
-              </span>
-              <Input
-                id="savedAmount"
-                type="number"
-                value={savedAmount || ""}
-                onChange={(e) => setSavedAmount(Number(e.target.value))}
-                className="pl-9"
-              />
-            </div>
+            <MoneyInput
+              id="savedAmount"
+              value={savedAmount}
+              onValueChange={setSavedAmount}
+            />
           </div>
         </div>
 

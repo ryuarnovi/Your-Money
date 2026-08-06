@@ -21,6 +21,7 @@ import {
 } from "@/actions/transaction.actions";
 import { getCategoriesAction } from "@/actions/crud.actions";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { MoneyInput } from "@/components/ui/money-input";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 
@@ -225,12 +226,11 @@ export default function TransactionsPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Nominal (Rp)</Label>
-                  <Input
-                    type="number"
-                    placeholder="50000"
+                  <Label>Nominal Transaksi</Label>
+                  <MoneyInput
+                    placeholder="50.000"
                     value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
+                    onValueChange={(val) => setAmount(String(val))}
                   />
                 </div>
 
@@ -315,12 +315,11 @@ export default function TransactionsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Nominal (Rp)</Label>
-              <Input
-                type="number"
-                placeholder="50000"
+              <Label>Nominal Transaksi</Label>
+              <MoneyInput
+                placeholder="50.000"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onValueChange={(val) => setAmount(String(val))}
               />
             </div>
 

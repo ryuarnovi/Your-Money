@@ -5,7 +5,15 @@ import { id } from "date-fns/locale";
 // Currency formatting
 // ============================================
 
-export function formatCurrency(amount: number): string {
+export function formatCurrency(amount: number, currency: string = "IDR"): string {
+  if (currency === "USD") {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  }
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
     currency: "IDR",
@@ -14,21 +22,33 @@ export function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-export function formatCompactCurrency(amount: number): string {
+export function formatCompactCurrency(amount: number, currency: string = "IDR"): string {
+  const symbol = currency === "USD" ? "$" : "Rp";
   if (amount >= 1_000_000_000) {
-    return `Rp${(amount / 1_000_000_000).toFixed(1)}M`;
+    return `${symbol}${(amount / 1_000_000_000).toFixed(1)}M`;
   }
   if (amount >= 1_000_000) {
-    return `Rp${(amount / 1_000_000).toFixed(1)}Jt`;
+    return `${symbol}${(amount / 1_000_000).toFixed(1)}${currency === "USD" ? "M" : "Jt"}`;
   }
   if (amount >= 1_000) {
-    return `Rp${(amount / 1_000).toFixed(0)}Rb`;
+    return `${symbol}${(amount / 1_000).toFixed(0)}${currency === "USD" ? "K" : "Rb"}`;
   }
-  return formatCurrency(amount);
+  return formatCurrency(amount, currency);
+}
+
+export function formatNumberWithDots(val: number | string, currency: string = "IDR"): string {
+  if (val === "" || val === undefined || val === null) return "";
+  const raw = String(val).replace(/[^0-9]/g, "");
+  if (!raw) return "";
+  const num = Number(raw);
+  if (currency === "USD") {
+    return num.toLocaleString("en-US");
+  }
+  return num.toLocaleString("id-ID");
 }
 
 export function parseCurrencyInput(value: string): number {
-  return Number(value.replace(/[^0-9.-]/g, "")) || 0;
+  return Number(value.replace(/[^0-9]/g, "")) || 0;
 }
 
 // ============================================

@@ -85,6 +85,32 @@ export default function SettingsPage() {
       <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
         <CardHeader>
           <div className="flex items-center gap-2">
+            <Settings className="h-5 w-5 text-indigo-500" />
+            <CardTitle className="text-base font-semibold">Mata Uang & Format</CardTitle>
+          </div>
+          <CardDescription>
+            Pilih mata uang utama yang digunakan dalam aplikasi
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Mata Uang Utamamu</Label>
+            <Select value={currency} onValueChange={(val) => val && setCurrency(val)}>
+              <SelectTrigger className="w-full md:w-72">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="IDR">🇮🇩 Rupiah Indonesia (IDR - Rp)</SelectItem>
+                <SelectItem value="USD">🇺🇸 US Dollar (USD - $)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+        <CardHeader>
+          <div className="flex items-center gap-2">
             <Bell className="h-5 w-5 text-indigo-500" />
             <CardTitle className="text-base font-semibold">Notifikasi & Peringatan Telegram</CardTitle>
           </div>
