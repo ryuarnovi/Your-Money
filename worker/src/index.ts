@@ -128,7 +128,7 @@ export default {
         "SELECT user_id, telegram_chat_id FROM telegram_users WHERE is_verified = 1"
       ).all<{ user_id: string; telegram_chat_id: string }>();
 
-      const isWeekly = event.cron === "0 13 * * 0"; // Sunday 20:00 WIB (13:00 UTC)
+      const isWeekly = event.cron === "0 13 * * SUN"; // Sunday 20:00 WIB (13:00 UTC)
       const now = Math.floor(Date.now() / 1000);
       const timeWindow = isWeekly ? 7 * 86400 : 30 * 86400;
 

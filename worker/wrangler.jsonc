@@ -8,12 +8,12 @@
     {
       "binding": "DB",
       "database_name": "duitku-db",
-      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+      "database_id": "6af8a884-44ee-4f99-87e4-5724e11e2cca"
     }
   ],
   "triggers": {
     "crons": [
-      "0 13 * * 0",
+      "0 13 * * SUN",
       "0 0 1 * *"
     ]
   }
