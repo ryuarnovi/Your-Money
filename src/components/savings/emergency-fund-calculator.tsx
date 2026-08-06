@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { ShieldAlert, ShieldCheck, Calculator, Sparkles, TrendingUp } from "lucide-react";
+import { ShieldAlert, ShieldCheck, Calculator, Sparkles, TrendingUp, Cpu } from "lucide-react";
 import { formatCurrency, formatCompactCurrency } from "@/utils";
 import { MoneyInput } from "@/components/ui/money-input";
 
@@ -19,9 +19,19 @@ export function EmergencyFundCalculator({
   avgMonthlyExpense,
   currentSavings = 0,
 }: EmergencyFundProps) {
-  const [monthlyExpense, setMonthlyExpense] = useState<number>(avgMonthlyExpense || 5000000);
+  const [monthlyExpense, setMonthlyExpense] = useState<number>(avgMonthlyExpense || 0);
   const [maritalStatus, setMaritalStatus] = useState<"single" | "married" | "married_kids">("single");
   const [savedAmount, setSavedAmount] = useState<number>(currentSavings);
+
+  useEffect(() => {
+    if (avgMonthlyExpense > 0) {
+      setMonthlyExpense(avgMonthlyExpense);
+    }
+  }, [avgMonthlyExpense]);
+
+  useEffect(() => {
+    setSavedAmount(currentSavings);
+  }, [currentSavings]);
 
   // Recommended months multiplier based on status
   const recommendedMonths = maritalStatus === "single" ? 6 : maritalStatus === "married" ? 9 : 12;

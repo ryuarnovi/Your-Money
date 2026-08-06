@@ -203,8 +203,71 @@ bot.on("message:text", async (ctx) => {
       `• Keterangan: _${fullDesc}_`,
       { parse_mode: "Markdown" }
     );
+
+    if (type === "expense") {
+      await checkAndSendExpenseAlert(userId, amount, fullDesc);
+    }
   } catch (error) {
     console.error("Failed to save telegram transaction:", error);
     await ctx.reply("❌ Gagal menyimpan transaksi.");
   }
 });
+
+export async function checkAndSendExpenseAlert(userId: string, expenseAmount: number, description?: string) {
+  try {
+    const tgUser = await queryOne<{ telegram_chat_id: string }>(
+      "SELECT telegram_chat_id FROM telegram_users WHERE user_id = ? AND is_verified = 1",
+      [userId]
+    );
+    if (!tgUser) return;
+
+    const settings = await queryOne<{ large_expense_threshold: number; notify_large_expense: number }>(
+      "SELECT large_expense_threshold, notify_large_expense FROM settings WHERE user_id = ?",
+      [userId]
+    );
+
+    const threshold = settings?.large_expense_threshold || 500000;
+    const notify = settings?.notify_large_expense !== 0;
+
+    // Calculate current month vs previous month expenses
+    const now = new Date();
+    const startThisMonth = Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000);
+    const startPrevMonth = Math.floor(new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime() / 1000);
+
+    const thisMonthRow = await queryOne<{ total: number }>(
+      "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE user_id = ? AND type = 'expense' AND date >= ?",
+      [userId, startThisMonth]
+    );
+    const prevMonthRow = await queryOne<{ total: number }>(
+      "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE user_id = ? AND type = 'expense' AND date >= ? AND date < ?",
+      [userId, startPrevMonth, startThisMonth]
+    );
+
+    const thisMonthTotal = thisMonthRow?.total || 0;
+    const prevMonthTotal = prevMonthRow?.total || 0;
+
+    // Alert 1: Large expense threshold alert
+    if (notify && expenseAmount >= threshold) {
+      await bot.api.sendMessage(
+        tgUser.telegram_chat_id,
+        `⚠️ *Peringatan Pengeluaran Besar!*\n\n` +
+        `Kamu baru saja mencatat pengeluaran sebesar *${formatCurrency(expenseAmount)}* (${description || "-"}).\n` +
+        `Nominal ini melebihi batas alert (${formatCurrency(threshold)}).`,
+        { parse_mode: "Markdown" }
+      );
+    }
+
+    // Alert 2: Expense surge alert when 2nd month exceeds 1st month baseline!
+    if (prevMonthTotal > 0 && thisMonthTotal > prevMonthTotal && (thisMonthTotal - expenseAmount) <= prevMonthTotal) {
+      await bot.api.sendMessage(
+        tgUser.telegram_chat_id,
+        `🚨 *Peringatan Lonjakan Pengeluaran Bulanan!*\n\n` +
+        `Pengeluaran bulan ini (*${formatCurrency(thisMonthTotal)}*) baru saja *MELEBIHI* pengeluaran bulan lalu (*${formatCurrency(prevMonthTotal)}*).\n\n` +
+        `💡 *Dampak*: Target ideal Dana Darurat kamu disesuaikan mengikuti lonjakan ini di web DuitKu. Harap perhatikan penggunaan budget!`,
+        { parse_mode: "Markdown" }
+      );
+    }
+  } catch (err) {
+    console.error("Failed to send expense alert:", err);
+  }
+}
