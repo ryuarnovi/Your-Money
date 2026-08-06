@@ -10,12 +10,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Search, Filter, Trash2, ArrowUpRight, ArrowDownRight, FileSpreadsheet, Download, RefreshCw } from "lucide-react";
+import { Plus, Search, Filter, Trash2, Edit2, ArrowUpRight, ArrowDownRight, FileSpreadsheet, Download, RefreshCw } from "lucide-react";
 import { formatCurrency, formatDate } from "@/utils";
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from "@/types";
 import {
   getTransactionsAction,
   createTransactionAction,
+  updateTransactionAction,
   deleteTransactionAction,
 } from "@/actions/transaction.actions";
 import { getCategoriesAction } from "@/actions/crud.actions";
@@ -32,6 +33,7 @@ interface Transaction {
   id: string;
   amount: number;
   type: "income" | "expense" | "transfer";
+  categoryId: string;
   categoryName: string;
   categoryColor: string;
   paymentMethod: PaymentMethod;
@@ -44,10 +46,11 @@ export default function TransactionsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [openCreate, setOpenCreate] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
 
-  // Form
+  // Form states for create/edit
   const [amount, setAmount] = useState("");
   const [type, setType] = useState<"income" | "expense" | "transfer">("expense");
   const [categoryId, setCategoryId] = useState("");
@@ -78,6 +81,26 @@ export default function TransactionsPage() {
     loadData();
   }, [filterType]);
 
+  function resetForm() {
+    setAmount("");
+    setType("expense");
+    setCategoryId("");
+    setPaymentMethod("cash");
+    setDescription("");
+    setDate(new Date().toISOString().split("T")[0]);
+    setEditingTransaction(null);
+  }
+
+  function handleOpenEdit(t: Transaction) {
+    setEditingTransaction(t);
+    setAmount(String(t.amount));
+    setType(t.type);
+    setCategoryId(t.categoryId || "");
+    setPaymentMethod(t.paymentMethod);
+    setDescription(t.description || "");
+    setDate(new Date(t.date).toISOString().split("T")[0]);
+  }
+
   async function handleCreate() {
     if (!amount || !categoryId) {
       toast.error("Nominal dan kategori wajib diisi");
@@ -96,11 +119,35 @@ export default function TransactionsPage() {
 
       toast.success("Transaksi berhasil ditambahkan!");
       setOpenCreate(false);
-      setAmount("");
-      setDescription("");
+      resetForm();
       loadData();
     } catch {
       toast.error("Gagal menambah transaksi");
+    }
+  }
+
+  async function handleUpdate() {
+    if (!editingTransaction || !amount || !categoryId) {
+      toast.error("Nominal dan kategori wajib diisi");
+      return;
+    }
+
+    try {
+      await updateTransactionAction(editingTransaction.id, {
+        amount: Number(amount),
+        type,
+        categoryId,
+        paymentMethod,
+        description,
+        date: new Date(date),
+      });
+
+      toast.success("Transaksi berhasil diperbarui!");
+      setEditingTransaction(null);
+      resetForm();
+      loadData();
+    } catch {
+      toast.error("Gagal memperbarui transaksi");
     }
   }
 
@@ -140,7 +187,7 @@ export default function TransactionsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Daftar Transaksi</h1>
           <p className="text-muted-foreground text-sm">
-            Catat dan kelola seluruh arus keuanganmu
+            Catat, edit, dan kelola seluruh arus keuanganmu
           </p>
         </div>
 
@@ -150,7 +197,7 @@ export default function TransactionsPage() {
             Excel
           </Button>
 
-          <Dialog open={openCreate} onOpenChange={setOpenCreate}>
+          <Dialog open={openCreate} onOpenChange={(open) => { setOpenCreate(open); if (!open) resetForm(); }}>
             <DialogTrigger>
               <Button size="sm" className="gap-1.5">
                 <Plus className="h-4 w-4" />
@@ -246,6 +293,95 @@ export default function TransactionsPage() {
         </div>
       </div>
 
+      {/* Dialog Edit Transaksi */}
+      <Dialog open={!!editingTransaction} onOpenChange={(open) => { if (!open) resetForm(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Transaksi</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Jenis Transaksi</Label>
+              <Select value={type} onValueChange={(val) => { if (val) { setType(val as any); setCategoryId(""); } }}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="expense">Pengeluaran (-)</SelectItem>
+                  <SelectItem value="income">Pemasukan (+)</SelectItem>
+                  <SelectItem value="transfer">Transfer (⇄)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Nominal (Rp)</Label>
+              <Input
+                type="number"
+                placeholder="50000"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Kategori</Label>
+              <Select value={categoryId} onValueChange={(val) => val && setCategoryId(val)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih Kategori" />
+                </SelectTrigger>
+                <SelectContent>
+                  {filteredCategories.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Metode Pembayaran</Label>
+              <Select value={paymentMethod} onValueChange={(val) => val && setPaymentMethod(val as any)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="bank">Bank Transfer</SelectItem>
+                  <SelectItem value="qris">QRIS</SelectItem>
+                  <SelectItem value="dana">Dana</SelectItem>
+                  <SelectItem value="ovo">OVO</SelectItem>
+                  <SelectItem value="gopay">GoPay</SelectItem>
+                  <SelectItem value="shopeepay">ShopeePay</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Tanggal</Label>
+              <Input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Keterangan</Label>
+              <Input
+                placeholder="Catatan tambahan..."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={handleUpdate}>Simpan Perubahan</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Filter & Search Bar */}
       <Card className="border-border/50 bg-card/80 backdrop-blur-sm p-4">
         <div className="flex flex-col md:flex-row gap-3">
@@ -285,7 +421,7 @@ export default function TransactionsPage() {
               <TableHead>Kategori / Keterangan</TableHead>
               <TableHead>Metode</TableHead>
               <TableHead className="text-right">Nominal</TableHead>
-              <TableHead className="w-[50px]"></TableHead>
+              <TableHead className="w-[80px] text-center">Aksi</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -296,7 +432,7 @@ export default function TransactionsPage() {
                   <TableCell><Skeleton className="h-4 w-40" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                   <TableCell className="text-right"><Skeleton className="h-4 w-28 ml-auto" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-6" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-12 mx-auto" /></TableCell>
                 </TableRow>
               ))
             ) : transactions.length === 0 ? (
@@ -334,14 +470,24 @@ export default function TransactionsPage() {
                     {t.type === "income" ? "+" : "-"}{formatCurrency(t.amount)}
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                      onClick={() => handleDelete(t.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center justify-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-primary"
+                        onClick={() => handleOpenEdit(t)}
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleDelete(t.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
