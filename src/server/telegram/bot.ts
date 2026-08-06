@@ -116,6 +116,39 @@ bot.command("budget", async (ctx) => {
   await ctx.reply(text, { parse_mode: "Markdown" });
 });
 
+// Command: /danadarurat
+bot.command("danadarurat", async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Silakan hubungkan akun DuitKu di web terlebih dahulu.");
+
+  const stats = await getTransactionStats(userId);
+  const savings = await queryOne<{ total: number }>(
+    "SELECT COALESCE(SUM(current_amount), 0) as total FROM saving_goals WHERE user_id = ?",
+    [userId]
+  );
+
+  const avgExpense = stats.totalExpense || 3000000;
+  const currentSaved = savings?.total || 0;
+
+  const t3 = avgExpense * 3;
+  const t6 = avgExpense * 6;
+  const t9 = avgExpense * 9;
+  const t12 = avgExpense * 12;
+
+  await ctx.reply(
+    "🛡️ *Kalkulasi & Status Dana Darurat*:\n\n" +
+    `• Rata-rata Pengeluaran: *${formatCurrency(avgExpense)}/bln*\n` +
+    `• Dana Terkumpul: *${formatCurrency(currentSaved)}*\n\n` +
+    `📌 *Target Berdasarkan Bulan*:\n` +
+    `• *3 Bulan*: ${formatCurrency(t3)} ${currentSaved >= t3 ? "✅ (Aman)" : `(Kurang ${formatCurrency(t3 - currentSaved)})`}\n` +
+    `• *6 Bulan (Lajang)*: ${formatCurrency(t6)} ${currentSaved >= t6 ? "✅ (Aman)" : `(Kurang ${formatCurrency(t6 - currentSaved)})`}\n` +
+    `• *9 Bulan (Menikah)*: ${formatCurrency(t9)} ${currentSaved >= t9 ? "✅ (Aman)" : `(Kurang ${formatCurrency(t9 - currentSaved)})`}\n` +
+    `• *12 Bulan (Menikah+Anak)*: ${formatCurrency(t12)} ${currentSaved >= t12 ? "✅ (Aman)" : `(Kurang ${formatCurrency(t12 - currentSaved)})`}`,
+    { parse_mode: "Markdown" }
+  );
+});
+
 // Message listener for natural language input (+500000 Gaji, -25000 Makan)
 bot.on("message:text", async (ctx) => {
   const text = ctx.message.text.trim();
