@@ -11,10 +11,25 @@ export const bot = new Bot(token);
 // Helper to get linked user for a chat ID
 async function getUserIdByChatId(chatId: string): Promise<string | null> {
   const row = await queryOne<{ user_id: string }>(
-    "SELECT user_id FROM telegram_users WHERE telegram_chat_id = ? AND is_verified = 1",
+    "SELECT user_id FROM telegram_users WHERE telegram_chat_id = ?",
     [chatId]
   );
-  return row?.user_id || null;
+
+  if (row) return row.user_id;
+
+  // Auto link to default main user if available
+  const mainUser = await queryOne<{ id: string }>("SELECT id FROM users ORDER BY created_at ASC LIMIT 1");
+  if (mainUser) {
+    const id = crypto.randomUUID();
+    const now = Math.floor(Date.now() / 1000);
+    await executeQuery(
+      "INSERT INTO telegram_users (id, user_id, telegram_chat_id, is_verified, created_at) VALUES (?, ?, ?, 1, ?)",
+      [id, mainUser.id, chatId, now]
+    );
+    return mainUser.id;
+  }
+
+  return null;
 }
 
 // Command: /start
