@@ -1,9 +1,15 @@
-import { Bot, Context, webhookCallback } from "grammy";
-import { queryOne, queryAll, executeQuery } from "@/db/client";
-import { findCategoryByName, getCategories } from "@/repositories/category.repository";
-import { createTransaction, getTransactionStats } from "@/repositories/transaction.repository";
+import { Bot } from "grammy";
+import { queryOne, executeQuery } from "@/db/client";
+import { findCategoryByName } from "@/repositories/category.repository";
+import {
+  createTransaction,
+  getTransactionStats,
+  getTransactions,
+  getCategoryBreakdown,
+} from "@/repositories/transaction.repository";
 import { getActiveBudgets } from "@/repositories/budget.repository";
-import { formatCurrency, formatDate } from "@/utils";
+import { getSavingGoals } from "@/repositories/saving.repository";
+import { formatCurrency, formatDate, formatMonthYear, getDateRange } from "@/utils";
 
 const token = process.env.TELEGRAM_BOT_TOKEN || "DEFAULT_TOKEN";
 export const bot = new Bot(token);
@@ -11,6 +17,25 @@ export const bot = new Bot(token);
 bot.catch((err) => {
   console.error("Grammy error handled:", err.error);
 });
+
+export async function registerBotCommands() {
+  try {
+    await bot.api.setMyCommands([
+      { command: "saldo", description: "Cek total saldo & ringkasan" },
+      { command: "today", description: "Transaksi hari ini" },
+      { command: "month", description: "Transaksi bulan ini" },
+      { command: "year", description: "Ringkasan tahun ini" },
+      { command: "budget", description: "Status budget kamu" },
+      { command: "statistik", description: "Statistik pengeluaran" },
+      { command: "report", description: "Laporan ringkas" },
+      { command: "danadarurat", description: "Status dana darurat" },
+      { command: "help", description: "Daftar perintah bot" },
+      { command: "start", description: "Mulai bot" },
+    ]);
+  } catch (err) {
+    console.error("Failed to set bot commands:", err);
+  }
+}
 
 // Helper to get linked user for a chat ID
 async function getUserIdByChatId(chatId: string): Promise<string | null> {
@@ -70,7 +95,8 @@ bot.command("help", async (ctx) => {
     "/year - Ringkasan tahun ini\n" +
     "/budget - Status budget kamu\n" +
     "/statistik - Statistik pengeluaran\n" +
-    "/report - Laporan ringkas\n\n" +
+    "/report - Laporan ringkas\n" +
+    "/danadarurat - Status dana darurat\n\n" +
     "💡 *Cara Catat Cepat*:\n" +
     "• `+500000 Gaji` (Pemasukan)\n" +
     "• `-25000 Makan` (Pengeluaran)\n" +
@@ -89,10 +115,91 @@ bot.command("saldo", async (ctx) => {
   const stats = await getTransactionStats(userId);
   await ctx.reply(
     "💰 *Ringkasan Saldo DuitKu*:\n\n" +
-    ` Total Pemasukan: *${formatCurrency(stats.totalIncome)}*\n` +
-    ` Total Pengeluaran: *${formatCurrency(stats.totalExpense)}*\n` +
+    `🟢 Total Pemasukan: *${formatCurrency(stats.totalIncome)}*\n` +
+    `🔴 Total Pengeluaran: *${formatCurrency(stats.totalExpense)}*\n` +
     `-----------------------------------\n` +
-    ` Total Saldo: *${formatCurrency(stats.balance)}*`,
+    `💵 Total Saldo: *${formatCurrency(stats.balance)}*`,
+    { parse_mode: "Markdown" }
+  );
+});
+
+// Command: /today
+bot.command("today", async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Silakan hubungkan akun DuitKu di web terlebih dahulu.");
+
+  const { start, end } = getDateRange("today");
+  const stats = await getTransactionStats(userId, start, end);
+  const { data: txs } = await getTransactions(userId, { startDate: start.toISOString(), endDate: end.toISOString(), pageSize: 20 });
+
+  let text = `📅 *Transaksi Hari Ini* (${formatDate(new Date())}):\n\n` +
+    `🟢 Pemasukan: *${formatCurrency(stats.totalIncome)}*\n` +
+    `🔴 Pengeluaran: *${formatCurrency(stats.totalExpense)}*\n` +
+    `-----------------------------------\n` +
+    `💰 Selisih: *${formatCurrency(stats.balance)}*\n\n`;
+
+  if (txs.length === 0) {
+    text += "ℹ️ Belum ada transaksi yang dicatat hari ini.";
+  } else {
+    text += `📝 *Daftar Transaksi (${txs.length})*:\n`;
+    for (const t of txs) {
+      const icon = t.type === "income" ? "🟢" : "🔴";
+      const desc = t.description ? ` - ${t.description}` : "";
+      text += `${icon} *${formatCurrency(t.amount)}* (${t.categoryName})${desc}\n`;
+    }
+  }
+
+  await ctx.reply(text, { parse_mode: "Markdown" });
+});
+
+// Command: /month
+bot.command("month", async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Silakan hubungkan akun DuitKu di web terlebih dahulu.");
+
+  const { start, end } = getDateRange("month");
+  const stats = await getTransactionStats(userId, start, end);
+  const { data: txs } = await getTransactions(userId, { startDate: start.toISOString(), endDate: end.toISOString(), pageSize: 10 });
+
+  let text = `📅 *Transaksi Bulan Ini* (${formatMonthYear(new Date())}):\n\n` +
+    `🟢 Total Pemasukan: *${formatCurrency(stats.totalIncome)}*\n` +
+    `🔴 Total Pengeluaran: *${formatCurrency(stats.totalExpense)}*\n` +
+    `-----------------------------------\n` +
+    `💰 Cashflow Net: *${formatCurrency(stats.balance)}*\n\n`;
+
+  if (txs.length === 0) {
+    text += "ℹ️ Belum ada transaksi bulan ini.";
+  } else {
+    text += `📝 *10 Transaksi Terakhir Bulan Ini*:\n`;
+    for (const t of txs) {
+      const icon = t.type === "income" ? "🟢" : "🔴";
+      const desc = t.description ? ` - ${t.description}` : "";
+      const dateStr = formatDate(t.date);
+      text += `${icon} *${formatCurrency(t.amount)}* (${t.categoryName})${desc} _[${dateStr}]_\n`;
+    }
+  }
+
+  await ctx.reply(text, { parse_mode: "Markdown" });
+});
+
+// Command: /year
+bot.command("year", async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Silakan hubungkan akun DuitKu di web terlebih dahulu.");
+
+  const { start, end } = getDateRange("year");
+  const stats = await getTransactionStats(userId, start, end);
+  const currentYear = new Date().getFullYear();
+
+  await ctx.reply(
+    `🗓️ *Ringkasan Tahun ${currentYear}*:\n\n` +
+    `🟢 Total Pemasukan: *${formatCurrency(stats.totalIncome)}*\n` +
+    `🔴 Total Pengeluaran: *${formatCurrency(stats.totalExpense)}*\n` +
+    `-----------------------------------\n` +
+    `💰 Total Net/Surplus: *${formatCurrency(stats.balance)}*`,
     { parse_mode: "Markdown" }
   );
 });
@@ -111,8 +218,85 @@ bot.command("budget", async (ctx) => {
   let text = "📊 *Status Budget Bulan Ini*:\n\n";
   for (const b of budgets) {
     const pct = Math.round(b.percentage);
-    text += `• *${b.name}*: ${formatCurrency(b.spent)} / ${formatCurrency(b.amount)} (${pct}%)\n`;
+    const status = b.spent > b.amount ? "⚠️" : "✅";
+    text += `${status} *${b.name}*: ${formatCurrency(b.spent)} / ${formatCurrency(b.amount)} (${pct}%)\n`;
   }
+  await ctx.reply(text, { parse_mode: "Markdown" });
+});
+
+// Command: /statistik
+bot.command("statistik", async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Silakan hubungkan akun DuitKu di web terlebih dahulu.");
+
+  const { start, end } = getDateRange("month");
+  const expenseBreakdown = await getCategoryBreakdown(userId, "expense", start, end);
+  const incomeBreakdown = await getCategoryBreakdown(userId, "income", start, end);
+
+  let text = `📊 *Statistik Keuangan Bulan Ini* (${formatMonthYear(new Date())}):\n\n`;
+
+  if (expenseBreakdown.length > 0) {
+    text += "🔴 *Pengeluaran per Kategori*:\n";
+    for (const c of expenseBreakdown) {
+      text += `• *${c.name}*: ${formatCurrency(c.value)} (${c.percentage.toFixed(1)}%)\n`;
+    }
+    text += "\n";
+  } else {
+    text += "🔴 *Pengeluaran per Kategori*: Belum ada data\n\n";
+  }
+
+  if (incomeBreakdown.length > 0) {
+    text += "🟢 *Pemasukan per Kategori*:\n";
+    for (const c of incomeBreakdown) {
+      text += `• *${c.name}*: ${formatCurrency(c.value)} (${c.percentage.toFixed(1)}%)\n`;
+    }
+  } else {
+    text += "🟢 *Pemasukan per Kategori*: Belum ada data";
+  }
+
+  await ctx.reply(text, { parse_mode: "Markdown" });
+});
+
+// Command: /report
+bot.command("report", async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Silakan hubungkan akun DuitKu di web terlebih dahulu.");
+
+  const { start, end } = getDateRange("month");
+  const stats = await getTransactionStats(userId, start, end);
+  const budgets = await getActiveBudgets(userId);
+  const savings = await getSavingGoals(userId);
+
+  let text = `📑 *Laporan Ringkas Keuangan (${formatMonthYear(new Date())})*\n\n`;
+
+  text += `💵 *Ringkasan Cashflow*:\n` +
+    `• Pemasukan: *${formatCurrency(stats.totalIncome)}*\n` +
+    `• Pengeluaran: *${formatCurrency(stats.totalExpense)}*\n` +
+    `• Net Cashflow: *${formatCurrency(stats.balance)}*\n\n`;
+
+  text += `📊 *Status Budget (${budgets.length})*:\n`;
+  if (budgets.length === 0) {
+    text += `• Belum ada budget aktif\n\n`;
+  } else {
+    for (const b of budgets.slice(0, 5)) {
+      const status = b.spent > b.amount ? "⚠️ Melebihi" : "✅ Aman";
+      text += `• *${b.name}*: ${formatCurrency(b.spent)} / ${formatCurrency(b.amount)} (${Math.round(b.percentage)}%) ${status}\n`;
+    }
+    text += "\n";
+  }
+
+  text += `🎯 *Target Tabungan (${savings.length})*:\n`;
+  if (savings.length === 0) {
+    text += `• Belum ada target tabungan\n`;
+  } else {
+    for (const s of savings.slice(0, 5)) {
+      const pct = Math.round(s.percentage);
+      text += `• *${s.name}*: ${formatCurrency(s.currentAmount)} / ${formatCurrency(s.targetAmount)} (${pct}%)\n`;
+    }
+  }
+
   await ctx.reply(text, { parse_mode: "Markdown" });
 });
 

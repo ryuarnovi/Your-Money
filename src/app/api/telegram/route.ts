@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { bot } from "@/server/telegram/bot";
+import { bot, registerBotCommands } from "@/server/telegram/bot";
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
 
     if (!bot.isInited()) {
       await bot.init();
+      registerBotCommands().catch(console.error);
     }
 
     // Process update via grammY

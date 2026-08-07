@@ -84,8 +84,13 @@ export function formatMonthYear(date: Date): string {
 export function getDateRange(period: string) {
   const now = new Date();
   switch (period) {
-    case "today":
-      return { start: new Date(now.setHours(0, 0, 0, 0)), end: new Date() };
+    case "today": {
+      const start = new Date(now);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(now);
+      end.setHours(23, 59, 59, 999);
+      return { start, end };
+    }
     case "week":
       return { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) };
     case "month":
