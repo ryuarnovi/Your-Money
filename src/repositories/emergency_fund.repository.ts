@@ -146,31 +146,24 @@ export async function getEmergencyFund(userId: string): Promise<{
     };
   });
 
-  if (!row) {
-    return {
-      fund: null,
-      histories: [],
-      monthlyExpenseChart,
-      contributionChart: [],
-    };
-  }
-
-  const historiesRaw = await queryAll<{
-    id: string;
-    fund_id: string;
-    amount: number;
-    note: string | null;
-    date: number;
-    created_at: number;
-  }>(
-    "SELECT * FROM emergency_fund_histories WHERE fund_id = ? ORDER BY date ASC",
-    [row.id]
-  );
+  const historiesRaw = row
+    ? await queryAll<{
+        id: string;
+        fund_id: string;
+        amount: number;
+        note: string | null;
+        date: number;
+        created_at: number;
+      }>(
+        "SELECT * FROM emergency_fund_histories WHERE fund_id = ? ORDER BY date ASC",
+        [row.id]
+      )
+    : [];
 
   const histories: DepositHistoryItem[] = historiesRaw.map((h) => ({
     id: h.id,
     fundId: h.fund_id,
-    amount: h.amount,
+    amount: Number(h.amount || 0),
     note: h.note,
     date: new Date(h.date * 1000),
     createdAt: new Date(h.created_at * 1000),
@@ -202,19 +195,21 @@ export async function getEmergencyFund(userId: string): Promise<{
     avgMonthlyDeposit = Math.round(totalDeposited / monthDiff);
   }
 
-  const currentAmount = row.current_amount || 0;
-  const targetAmount = row.target_amount || 0;
+  const currentAmount = row ? Number(row.current_amount || 0) : 0;
+  const targetMonths = row ? row.target_months : 6;
+  const activeExpense = automatedExpense > 0 ? automatedExpense : (row ? Number(row.monthly_expense || 0) : 0);
+  const targetAmount = activeExpense > 0 ? activeExpense * targetMonths : (row ? Number(row.target_amount || 0) : 0);
   const remainingAmount = Math.max(0, targetAmount - currentAmount);
 
   let estimatedMonthsRemaining: number | null = null;
-  if (remainingAmount === 0) {
+  if (targetAmount > 0 && remainingAmount === 0) {
     estimatedMonthsRemaining = 0;
   } else if (avgMonthlyDeposit > 0) {
     estimatedMonthsRemaining = Math.ceil(remainingAmount / avgMonthlyDeposit);
   }
 
   // Check surge (>= 10% increase from saved monthly_expense)
-  const savedExpense = row.monthly_expense || 0;
+  const savedExpense = row ? Number(row.monthly_expense || 0) : 0;
   let isSurging = false;
   let surgePercentage = 0;
   let recommendedNewTarget = targetAmount;
@@ -225,25 +220,23 @@ export async function getEmergencyFund(userId: string): Promise<{
     );
     if (surgePercentage >= 10) {
       isSurging = true;
-      recommendedNewTarget = automatedExpense * row.target_months;
+      recommendedNewTarget = automatedExpense * targetMonths;
     }
   }
 
   const progressPercent =
     targetAmount > 0 ? Math.min(100, Math.round((currentAmount / targetAmount) * 100)) : 0;
 
-  const activeExpense = automatedExpense > 0 ? automatedExpense : (row ? row.monthly_expense : 0);
-
   const fund: EmergencyFundData = {
-    id: row.id,
-    userId: row.user_id,
+    id: row ? row.id : "",
+    userId: row ? row.user_id : userId,
     monthlyExpense: activeExpense,
-    targetMonths: row.target_months,
-    targetAmount: activeExpense > 0 ? activeExpense * row.target_months : row.target_amount,
+    targetMonths,
+    targetAmount,
     currentAmount,
-    status: (row.status as any) || "single",
-    createdAt: new Date(row.created_at * 1000),
-    updatedAt: new Date(row.updated_at * 1000),
+    status: row ? ((row.status as any) || "single") : "single",
+    createdAt: row ? new Date(row.created_at * 1000) : new Date(),
+    updatedAt: row ? new Date(row.updated_at * 1000) : new Date(),
     progressPercent,
     remainingAmount,
     automatedMonthlyExpense: activeExpense,
