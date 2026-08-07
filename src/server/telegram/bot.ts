@@ -306,7 +306,8 @@ bot.command("danadarurat", async (ctx) => {
   const userId = await getUserIdByChatId(chatId);
   if (!userId) return ctx.reply("⚠️ Silakan hubungkan akun DuitKu di web terlebih dahulu.");
 
-  const stats = await getTransactionStats(userId);
+  const { start, end } = getDateRange("month");
+  const stats = await getTransactionStats(userId, start, end);
   const savings = await queryOne<{ total: number }>(
     "SELECT COALESCE(SUM(current_amount), 0) as total FROM saving_goals WHERE user_id = ?",
     [userId]
