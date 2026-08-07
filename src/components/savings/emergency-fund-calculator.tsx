@@ -49,7 +49,7 @@ export function EmergencyFundCalculator({
     }
   }, [fundData]);
 
-  const automatedExpense = fundData?.automatedMonthlyExpense || 3000000;
+  const automatedExpense = fundData?.automatedMonthlyExpense || 0;
   const currentSaved = fundData?.currentAmount || 0;
 
   // Calculation of Target Dana Darurat = Rata-rata Pengeluaran × Target Bulan

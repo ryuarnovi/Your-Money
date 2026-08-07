@@ -85,7 +85,7 @@ export async function calculateAutomatedMonthlyExpense(userId: string) {
   const rows = await queryAll<{ month: string; total: number }>(
     `SELECT strftime('%Y-%m', date, 'unixepoch') as month, SUM(amount) as total
      FROM transactions
-     WHERE user_id = ? AND type = 'expense'
+     WHERE user_id = ? AND (type IN ('expense', 'transfer') OR category_id IN (SELECT id FROM categories WHERE type = 'expense'))
      GROUP BY month
      ORDER BY month DESC
      LIMIT 6`,
@@ -109,7 +109,7 @@ export async function calculateAutomatedMonthlyExpense(userId: string) {
   return {
     automatedExpense,
     count: rows.length,
-    monthlyTotals: rows.reverse(), // ascending order for chart
+    monthlyTotals: rows.slice().reverse(), // ascending order for chart
   };
 }
 
@@ -232,19 +232,21 @@ export async function getEmergencyFund(userId: string): Promise<{
   const progressPercent =
     targetAmount > 0 ? Math.min(100, Math.round((currentAmount / targetAmount) * 100)) : 0;
 
+  const activeExpense = automatedExpense > 0 ? automatedExpense : (row ? row.monthly_expense : 0);
+
   const fund: EmergencyFundData = {
     id: row.id,
     userId: row.user_id,
-    monthlyExpense: row.monthly_expense,
+    monthlyExpense: activeExpense,
     targetMonths: row.target_months,
-    targetAmount: row.target_amount,
+    targetAmount: activeExpense > 0 ? activeExpense * row.target_months : row.target_amount,
     currentAmount,
     status: (row.status as any) || "single",
     createdAt: new Date(row.created_at * 1000),
     updatedAt: new Date(row.updated_at * 1000),
     progressPercent,
     remainingAmount,
-    automatedMonthlyExpense: automatedExpense || row.monthly_expense,
+    automatedMonthlyExpense: activeExpense,
     dataMonthsCount,
     estimatedMonthsRemaining,
     avgMonthlyDeposit,
@@ -273,7 +275,7 @@ export async function saveEmergencyFundTarget(data: {
   const monthlyExpense =
     data.customMonthlyExpense && data.customMonthlyExpense > 0
       ? data.customMonthlyExpense
-      : automatedExpense || 3000000;
+      : automatedExpense;
 
   const targetAmount = monthlyExpense * data.targetMonths;
 
@@ -329,7 +331,7 @@ export async function addEmergencyFundDeposit(data: {
   if (!fund) {
     // Auto initialize default emergency fund if none exists yet
     const { automatedExpense } = await calculateAutomatedMonthlyExpense(data.userId);
-    const monthlyExpense = automatedExpense || 3000000;
+    const monthlyExpense = automatedExpense;
     const targetMonths = 6;
     const targetAmount = monthlyExpense * targetMonths;
     const fundId = generateId();
