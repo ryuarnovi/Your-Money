@@ -158,7 +158,7 @@ export default {
         summaryText += `💰 Selisih: Rp${(totalIncome - totalExpense).toLocaleString("id-ID")}\n`;
         summaryText += `\nTotal ${txs.length} transaksi tercatat.`;
 
-        // Send via Telegram API directly
+        // Send summary text via Telegram API
         await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -168,6 +168,34 @@ export default {
             parse_mode: "Markdown",
           }),
         });
+
+        // For monthly report, also generate and send CSV file document automatically
+        if (!isWeekly) {
+          const csvLines = ["Tanggal,Jenis,Nominal,Keterangan"];
+          for (const t of txs) {
+            const dateStr = new Date(t.date * 1000).toISOString().split("T")[0];
+            const typeStr = t.type === "income" ? "Pemasukan" : "Pengeluaran";
+            const desc = `"${(t.description || "-").replace(/"/g, '""')}"`;
+            csvLines.push(`${dateStr},${typeStr},${t.amount},${desc}`);
+          }
+          const csvContent = csvLines.join("\n");
+          const dateToday = new Date().toISOString().split("T")[0];
+
+          const formData = new FormData();
+          formData.append("chat_id", u.telegram_chat_id);
+          formData.append("caption", "📎 *File CSV Laporan Bulanan DuitKu*");
+          formData.append("parse_mode", "Markdown");
+          formData.append(
+            "document",
+            new Blob([csvContent], { type: "text/csv" }),
+            `Laporan_Bulanan_DuitKu_${dateToday}.csv`
+          );
+
+          await fetch(`https://api.telegram.org/bot${botToken}/sendDocument`, {
+            method: "POST",
+            body: formData,
+          });
+        }
       }
     } catch (err) {
       console.error("Cloudflare Cron error:", err);
