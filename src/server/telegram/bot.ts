@@ -306,32 +306,35 @@ bot.command("danadarurat", async (ctx) => {
   const userId = await getUserIdByChatId(chatId);
   if (!userId) return ctx.reply("⚠️ Silakan hubungkan akun DuitKu di web terlebih dahulu.");
 
-  const { start, end } = getDateRange("month");
-  const stats = await getTransactionStats(userId, start, end);
-  const savings = await queryOne<{ total: number }>(
-    "SELECT COALESCE(SUM(current_amount), 0) as total FROM saving_goals WHERE user_id = ?",
-    [userId]
-  );
+  const { getEmergencyFund } = await import("@/repositories/emergency_fund.repository");
+  const { fund } = await getEmergencyFund(userId);
 
-  const avgExpense = stats.totalExpense || 3000000;
-  const currentSaved = savings?.total || 0;
+  const avgExpense = fund?.automatedMonthlyExpense || 3000000;
+  const currentSaved = fund?.currentAmount || 0;
+  const targetMonths = fund?.targetMonths || 6;
+  const targetAmount = fund?.targetAmount || avgExpense * targetMonths;
 
   const t3 = avgExpense * 3;
   const t6 = avgExpense * 6;
   const t9 = avgExpense * 9;
   const t12 = avgExpense * 12;
 
-  await ctx.reply(
-    "🛡️ *Kalkulasi & Status Dana Darurat*:\n\n" +
-    `• Rata-rata Pengeluaran: *${formatCurrency(avgExpense)}/bln*\n` +
-    `• Dana Terkumpul: *${formatCurrency(currentSaved)}*\n\n` +
-    `📌 *Target Berdasarkan Bulan*:\n` +
+  let text = "🛡️ *Smart Emergency Fund Calculator*:\n\n" +
+    `• Est. Pengeluaran / Bulan: *${formatCurrency(avgExpense)}*\n` +
+    `• Target Aktif (${targetMonths} Bln): *${formatCurrency(targetAmount)}*\n` +
+    `• Dana Terkumpul: *${formatCurrency(currentSaved)}* (${fund?.progressPercent || 0}%)\n` +
+    `• Sisa Kurang: *${formatCurrency(fund?.remainingAmount || Math.max(0, targetAmount - currentSaved))}*\n\n` +
+    `📌 *Breakdown Target*:\n` +
     `• *3 Bulan*: ${formatCurrency(t3)} ${currentSaved >= t3 ? "✅ (Aman)" : `(Kurang ${formatCurrency(t3 - currentSaved)})`}\n` +
     `• *6 Bulan (Lajang)*: ${formatCurrency(t6)} ${currentSaved >= t6 ? "✅ (Aman)" : `(Kurang ${formatCurrency(t6 - currentSaved)})`}\n` +
     `• *9 Bulan (Menikah)*: ${formatCurrency(t9)} ${currentSaved >= t9 ? "✅ (Aman)" : `(Kurang ${formatCurrency(t9 - currentSaved)})`}\n` +
-    `• *12 Bulan (Menikah+Anak)*: ${formatCurrency(t12)} ${currentSaved >= t12 ? "✅ (Aman)" : `(Kurang ${formatCurrency(t12 - currentSaved)})`}`,
-    { parse_mode: "Markdown" }
-  );
+    `• *12 Bulan (Menikah+Anak)*: ${formatCurrency(t12)} ${currentSaved >= t12 ? "✅ (Aman)" : `(Kurang ${formatCurrency(t12 - currentSaved)})`}`;
+
+  if (fund?.isSurging) {
+    text += `\n\n⚠️ *Perhatian*: Pengeluaran kamu meningkat ${fund.surgePercentage}%. Rekomendasi target baru: *${formatCurrency(fund.recommendedNewTarget)}*.`;
+  }
+
+  await ctx.reply(text, { parse_mode: "Markdown" });
 });
 
 // Message listener for natural language input (+500000 Gaji, -25000 Makan)

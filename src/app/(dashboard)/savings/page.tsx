@@ -7,19 +7,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Plus, PiggyBank, Target, Trash2, Edit2, ShieldCheck, CheckCircle2 } from "lucide-react";
-import { formatCurrency, formatDate } from "@/utils";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Plus, PiggyBank, Target, Trash2, CheckCircle2 } from "lucide-react";
+import { formatCurrency } from "@/utils";
 import {
   getSavingGoalsAction,
   createSavingGoalAction,
   deleteSavingGoalAction,
   addToSavingGoalAction,
 } from "@/actions/crud.actions";
-import { getDashboardStatsAction } from "@/actions/transaction.actions";
+import { getEmergencyFundAction } from "@/actions/emergency_fund.actions";
 import { EmergencyFundCalculator } from "@/components/savings/emergency-fund-calculator";
+import { EmergencyFundCharts } from "@/components/savings/emergency-fund-charts";
 import { MoneyInput } from "@/components/ui/money-input";
 import { toast } from "sonner";
+import type {
+  EmergencyFundData,
+  MonthlyExpenseChartItem,
+  ContributionChartItem,
+} from "@/repositories/emergency_fund.repository";
 
 interface SavingGoal {
   id: string;
@@ -36,12 +42,14 @@ interface SavingGoal {
 
 export default function SavingsPage() {
   const [goals, setGoals] = useState<SavingGoal[]>([]);
-  const [avgMonthlyExpense, setAvgMonthlyExpense] = useState<number>(0);
+  const [fundData, setFundData] = useState<EmergencyFundData | null>(null);
+  const [monthlyExpensesChart, setMonthlyExpensesChart] = useState<MonthlyExpenseChartItem[]>([]);
+  const [contributionChart, setContributionChart] = useState<ContributionChartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [openCreate, setOpenCreate] = useState(false);
   const [openDeposit, setOpenDeposit] = useState<string | null>(null);
 
-  // Form states
+  // Form states for general saving goal
   const [name, setName] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
   const [currentAmount, setCurrentAmount] = useState("");
@@ -50,14 +58,16 @@ export default function SavingsPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const [goalsData, statsData] = await Promise.all([
+      const [goalsData, fundRes] = await Promise.all([
         getSavingGoalsAction(),
-        getDashboardStatsAction(),
+        getEmergencyFundAction(),
       ]);
       setGoals(goalsData as SavingGoal[]);
-      setAvgMonthlyExpense(statsData.totalExpense || 3000000);
+      setFundData(fundRes.fund);
+      setMonthlyExpensesChart(fundRes.monthlyExpenseChart);
+      setContributionChart(fundRes.contributionChart);
     } catch (err) {
-      console.error(err);
+      console.error("Failed to load savings data:", err);
     } finally {
       setLoading(false);
     }
@@ -118,17 +128,15 @@ export default function SavingsPage() {
     }
   }
 
-  const totalSaved = goals.reduce((sum, g) => sum + g.currentAmount, 0);
-
   if (loading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-10 w-48" />
-        <Skeleton className="h-64 w-full" />
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-72 w-full rounded-2xl" />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Skeleton className="h-44 w-full" />
-          <Skeleton className="h-44 w-full" />
-          <Skeleton className="h-44 w-full" />
+          <Skeleton className="h-48 w-full rounded-2xl" />
+          <Skeleton className="h-48 w-full rounded-2xl" />
+          <Skeleton className="h-48 w-full rounded-2xl" />
         </div>
       </div>
     );
@@ -141,7 +149,7 @@ export default function SavingsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Tabungan & Dana Darurat</h1>
           <p className="text-muted-foreground text-sm">
-            Rencanakan dan pantau dana darurat serta target impianmu
+            Hitung kecukupan dana darurat pintar dan kelola target impianmu
           </p>
         </div>
 
@@ -187,23 +195,30 @@ export default function SavingsPage() {
         </Dialog>
       </div>
 
-      {/* Emergency Fund Calculator */}
+      {/* Smart Emergency Fund Calculator */}
       <EmergencyFundCalculator
-        avgMonthlyExpense={avgMonthlyExpense}
-        currentSavings={totalSaved}
+        fundData={fundData}
+        onRefresh={loadData}
       />
 
-      {/* Saving Goals Section */}
-      <div className="space-y-4">
+      {/* Recharts Analytics for Emergency Fund */}
+      <EmergencyFundCharts
+        monthlyExpenses={monthlyExpensesChart}
+        contributions={contributionChart}
+        targetAmount={fundData?.targetAmount || 0}
+      />
+
+      {/* General Saving Goals Section */}
+      <div className="space-y-4 pt-4 border-t border-border/40">
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <PiggyBank className="h-5 w-5 text-indigo-500" />
           Target Tabungan Impian
         </h2>
 
         {goals.length === 0 ? (
-          <Card className="border-dashed p-8 text-center">
+          <Card className="border-dashed p-8 text-center bg-card/50">
             <PiggyBank className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
-            <p className="text-sm font-medium">Belum ada target tabungan</p>
+            <p className="text-sm font-medium">Belum ada target tabungan impian</p>
             <p className="text-xs text-muted-foreground mb-4">
               Buat target untuk DP rumah, kendaraan, atau liburan
             </p>
@@ -266,23 +281,23 @@ export default function SavingsPage() {
                           onOpenChange={(open) => setOpenDeposit(open ? goal.id : null)}
                         >
                           <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Setor Tabungan - {goal.name}</DialogTitle>
-                          </DialogHeader>
-                          <div className="space-y-4 py-2">
-                            <div className="space-y-2">
-                              <Label>Nominal Setoran</Label>
-                              <MoneyInput
-                                placeholder="500.000"
-                                value={depositAmount}
-                                onValueChange={(val) => setDepositAmount(String(val))}
-                              />
+                            <DialogHeader>
+                              <DialogTitle>Setor Tabungan - {goal.name}</DialogTitle>
+                            </DialogHeader>
+                            <div className="space-y-4 py-2">
+                              <div className="space-y-2">
+                                <Label>Nominal Setoran</Label>
+                                <MoneyInput
+                                  placeholder="500.000"
+                                  value={depositAmount}
+                                  onValueChange={(val) => setDepositAmount(String(val))}
+                                />
+                              </div>
                             </div>
-                          </div>
-                          <DialogFooter>
-                            <Button onClick={() => handleDeposit(goal.id)}>Setor</Button>
-                          </DialogFooter>
-                        </DialogContent>
+                            <DialogFooter>
+                              <Button onClick={() => handleDeposit(goal.id)}>Setor</Button>
+                            </DialogFooter>
+                          </DialogContent>
                         </Dialog>
                       </>
                     )}

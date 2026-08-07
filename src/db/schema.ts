@@ -244,6 +244,41 @@ export const auditLogs = sqliteTable("audit_logs", {
     .$defaultFn(() => new Date()),
 });
 
+export const emergencyFunds = sqliteTable("emergency_funds", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id")
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: "cascade" }),
+  monthlyExpense: real("monthly_expense").notNull(),
+  targetMonths: integer("target_months").notNull().default(6),
+  targetAmount: real("target_amount").notNull(),
+  currentAmount: real("current_amount").default(0),
+  status: text("status", { enum: ["single", "married", "married_kids"] })
+    .notNull()
+    .default("single"),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .$defaultFn(() => new Date()),
+});
+
+export const emergencyFundHistories = sqliteTable("emergency_fund_histories", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  fundId: text("fund_id")
+    .notNull()
+    .references(() => emergencyFunds.id, { onDelete: "cascade" }),
+  amount: real("amount").notNull(),
+  note: text("note"),
+  date: integer("date", { mode: "timestamp" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .$defaultFn(() => new Date()),
+});
+
 // ============================================
 // RELATIONS
 // ============================================
@@ -258,6 +293,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   recurringBills: many(recurringBills),
   settings: one(settings),
   telegramUser: one(telegramUsers),
+  emergencyFund: one(emergencyFunds),
   auditLogs: many(auditLogs),
 }));
 
@@ -360,3 +396,24 @@ export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
     references: [users.id],
   }),
 }));
+
+export const emergencyFundsRelations = relations(
+  emergencyFunds,
+  ({ one, many }) => ({
+    user: one(users, {
+      fields: [emergencyFunds.userId],
+      references: [users.id],
+    }),
+    histories: many(emergencyFundHistories),
+  })
+);
+
+export const emergencyFundHistoriesRelations = relations(
+  emergencyFundHistories,
+  ({ one }) => ({
+    fund: one(emergencyFunds, {
+      fields: [emergencyFundHistories.fundId],
+      references: [emergencyFunds.id],
+    }),
+  })
+);
