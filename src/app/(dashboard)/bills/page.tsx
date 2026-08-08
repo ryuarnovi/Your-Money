@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, CalendarClock, Trash2, CheckCircle, AlertTriangle } from "lucide-react";
-import { formatCurrency, formatDate } from "@/utils";
+import { formatCurrency, formatDate, formatNumberWithDots, parseCurrencyInput } from "@/utils";
 import {
   getRecurringBillsAction,
   createRecurringBillAction,
@@ -80,7 +80,7 @@ export default function BillsPage() {
     try {
       await createRecurringBillAction({
         name,
-        amount: Number(amount),
+        amount: parseCurrencyInput(amount),
         categoryId: categoryId || undefined,
         frequency,
         nextDueDate: new Date(nextDueDate),
@@ -90,6 +90,7 @@ export default function BillsPage() {
       setOpenCreate(false);
       setName("");
       setAmount("");
+      setCategoryId("");
       loadData();
     } catch {
       toast.error("Gagal membuat tagihan");
@@ -174,17 +175,19 @@ export default function BillsPage() {
               <div className="space-y-2">
                 <Label>Nominal (Rp)</Label>
                 <Input
-                  type="number"
-                  placeholder="350000"
+                  type="text"
+                  placeholder="350.000"
                   value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
+                  onChange={(e) => setAmount(formatNumberWithDots(e.target.value))}
                 />
               </div>
               <div className="space-y-2">
                 <Label>Kategori</Label>
                 <Select value={categoryId} onValueChange={(val) => val && setCategoryId(val)}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Pilih Kategori" />
+                    <SelectValue placeholder="Pilih Kategori">
+                      {categories.find((c) => c.id === categoryId)?.name}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {categories.map((c) => (
@@ -199,7 +202,9 @@ export default function BillsPage() {
                 <Label>Frekuensi</Label>
                 <Select value={frequency} onValueChange={(val) => val && setFrequency(val)}>
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue>
+                      {frequency === "weekly" ? "Mingguan" : frequency === "yearly" ? "Tahunan" : "Bulanan"}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="weekly">Mingguan</SelectItem>
@@ -242,8 +247,13 @@ export default function BillsPage() {
             <Card key={b.id} className="border-border/50 bg-card/80 backdrop-blur-sm relative">
               <CardContent className="p-4 flex items-center justify-between">
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-base">{b.name}</span>
+                    {b.categoryName && (
+                      <Badge variant="secondary" className="text-[10px] bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                        {b.categoryName}
+                      </Badge>
+                    )}
                     {b.isOverdue ? (
                       <Badge variant="destructive" className="text-[10px]">
                         Terlambat ({Math.abs(b.daysUntilDue)} Hari)

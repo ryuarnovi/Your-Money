@@ -183,7 +183,11 @@ export default function BudgetPage() {
                 <Label>Kategori Spesifik (Opsional)</Label>
                 <Select value={categoryId} onValueChange={(val) => val && setCategoryId(val)}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Semua Pengeluaran" />
+                    <SelectValue placeholder="Semua Pengeluaran">
+                      {categoryId === "all_categories" || !categoryId
+                        ? "Semua Kategori Pengeluaran"
+                        : categories.find((c) => c.id === categoryId)?.name}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all_categories">Semua Kategori Pengeluaran</SelectItem>
