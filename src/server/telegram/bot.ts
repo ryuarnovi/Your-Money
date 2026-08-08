@@ -89,7 +89,8 @@ bot.command("start", async (ctx) => {
 bot.command("help", async (ctx) => {
   await ctx.reply(
     "📋 *Daftar Perintah DuitKu Bot*:\n\n" +
-    "/saldo - Cek total saldo & ringkasan\n" +
+    "/saldo - Cek total saldo & rincian dompet\n" +
+    "/dompet - Saldo Kas, Bank, & E-Money\n" +
     "/today - Transaksi hari ini\n" +
     "/month - Transaksi bulan ini\n" +
     "/year - Ringkasan tahun ini\n" +
@@ -98,10 +99,10 @@ bot.command("help", async (ctx) => {
     "/report - Laporan ringkas\n" +
     "/danadarurat - Status dana darurat\n\n" +
     "💡 *Cara Catat Cepat*:\n" +
-    "• `+500000 Gaji` (Pemasukan)\n" +
-    "• `-25000 Makan` (Pengeluaran)\n" +
-    "• `-15000 Kopi` (Pengeluaran)\n" +
-    "• `-250000 Listrik` (Pengeluaran)",
+    "• `+500000 Gaji bank` (Pemasukan ke Bank)\n" +
+    "• `-25000 Makan cash` (Pengeluaran Tunai)\n" +
+    "• `-15000 Kopi gopay` (Pengeluaran E-Wallet)\n" +
+    "• `-250000 Listrik bca` (Pengeluaran Bank)",
     { parse_mode: "Markdown" }
   );
 });
@@ -112,13 +113,16 @@ bot.command("saldo", async (ctx) => {
   const userId = await getUserIdByChatId(chatId);
   if (!userId) return ctx.reply("⚠️ Silakan hubungkan akun DuitKu di web terlebih dahulu.");
 
-  const stats = await getTransactionStats(userId);
+  const { getWalletStats } = await import("@/repositories/wallet.repository");
+  const stats = await getWalletStats(userId);
+
   await ctx.reply(
     "💰 *Ringkasan Saldo DuitKu*:\n\n" +
-    `🟢 Total Pemasukan: *${formatCurrency(stats.totalIncome)}*\n` +
-    `🔴 Total Pengeluaran: *${formatCurrency(stats.totalExpense)}*\n` +
+    `🏦 Total Bank: *${formatCurrency(stats.totalBank)}*\n` +
+    `💵 Total Kas Tunai: *${formatCurrency(stats.totalCash)}*\n` +
+    `📱 Total E-Money: *${formatCurrency(stats.totalEmoney)}*\n` +
     `-----------------------------------\n` +
-    `💵 Total Saldo: *${formatCurrency(stats.balance)}*`,
+    `💰 *Total Saldo Gabungan*: *${formatCurrency(stats.totalOverall)}*`,
     { parse_mode: "Markdown" }
   );
 });
@@ -337,7 +341,32 @@ bot.command("danadarurat", async (ctx) => {
   await ctx.reply(text, { parse_mode: "Markdown" });
 });
 
-// Message listener for natural language input (+500000 Gaji, -25000 Makan)
+// Command: /dompet or /rekening
+bot.command(["dompet", "rekening"], async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Silakan hubungkan akun DuitKu di web terlebih dahulu.");
+
+  const { getWallets, getWalletStats } = await import("@/repositories/wallet.repository");
+  const wallets = await getWallets(userId);
+  const stats = await getWalletStats(userId);
+
+  let text = "💳 *Status Saldo Dompet & Rekening*:\n\n";
+  text += `🏦 Total Bank: *${formatCurrency(stats.totalBank)}*\n`;
+  text += `💵 Total Kas Tunai: *${formatCurrency(stats.totalCash)}*\n`;
+  text += `📱 Total E-Money: *${formatCurrency(stats.totalEmoney)}*\n`;
+  text += `💰 *Total Saldo Gabungan*: *${formatCurrency(stats.totalOverall)}*\n\n`;
+
+  text += "📋 *Rincian Akun*:\n";
+  for (const w of wallets) {
+    const badge = w.type === "cash" ? "💵 Kas" : w.type === "bank" ? "🏦 Bank" : "📱 E-Money";
+    text += `• *${w.name}* (${badge}): ${formatCurrency(w.currentBalance)}\n`;
+  }
+
+  await ctx.reply(text, { parse_mode: "Markdown" });
+});
+
+// Message listener for natural language input (+500000 Gaji, -25000 Makan bank)
 bot.on("message:text", async (ctx) => {
   const text = ctx.message.text.trim();
   if (text.startsWith("/")) return; // Ignore unhandled commands
@@ -350,7 +379,7 @@ bot.on("message:text", async (ctx) => {
   const match = text.match(/^([+-])([0-9.,\s]+?)\s+(.*)$/);
   if (!match) {
     return ctx.reply(
-      "Format tidak dikenali. Gunakan contoh:\n`+500.000 Gaji` atau `-40.000 Transport`",
+      "Format tidak dikenali. Gunakan contoh:\n`+500.000 Gaji bank` atau `-40.000 Transport gopay`",
       { parse_mode: "Markdown" }
     );
   }
@@ -364,9 +393,39 @@ bot.on("message:text", async (ctx) => {
   }
 
   const fullDesc = match[3].trim();
-  // Clean category search string (e.g. 'transport(pengeluaran)' -> 'transport')
-  const cleanCategorySearch = fullDesc.replace(/\(.*?\)/g, "").trim() || fullDesc;
   const type = sign === "+" ? "income" : "expense";
+
+  // Check if ending with payment method (e.g. 'Makan bank', 'Transport gopay', 'Kopi cash')
+  const knownMethods: Record<string, string> = {
+    cash: "cash",
+    tunai: "cash",
+    bank: "bank",
+    bca: "bank",
+    mandiri: "bank",
+    bri: "bank",
+    bni: "bank",
+    transfer: "transfer",
+    qris: "qris",
+    gopay: "gopay",
+    ovo: "ovo",
+    dana: "dana",
+    shopeepay: "shopeepay",
+  };
+
+  let detectedMethod = "cash";
+  let cleanDesc = fullDesc;
+
+  const parts = fullDesc.split(/\s+/);
+  if (parts.length > 1) {
+    const lastWord = parts[parts.length - 1].toLowerCase();
+    if (knownMethods[lastWord]) {
+      detectedMethod = knownMethods[lastWord];
+      cleanDesc = parts.slice(0, -1).join(" ");
+    }
+  }
+
+  // Clean category search string (e.g. 'transport(pengeluaran)' -> 'transport')
+  const cleanCategorySearch = cleanDesc.replace(/\(.*?\)/g, "").trim() || cleanDesc;
 
   // Find category
   const cat = await findCategoryByName(cleanCategorySearch, type);
@@ -378,8 +437,8 @@ bot.on("message:text", async (ctx) => {
       amount,
       type,
       categoryId,
-      paymentMethod: "cash",
-      description: fullDesc,
+      paymentMethod: detectedMethod,
+      description: cleanDesc,
       date: new Date(),
     });
 
@@ -387,13 +446,14 @@ bot.on("message:text", async (ctx) => {
       `✅ *Transaksi Berhasil Dicatat*!\n\n` +
       `• Jenis: ${type === "income" ? "Pemasukan 🟢" : "Pengeluaran 🔴"}\n` +
       `• Nominal: *${formatCurrency(amount)}*\n` +
+      `• Akun / Metode: *${detectedMethod.toUpperCase()}*\n` +
       `• Kategori: *${cat?.name || cleanCategorySearch}*\n` +
-      `• Keterangan: _${fullDesc}_`,
+      `• Keterangan: _${cleanDesc}_`,
       { parse_mode: "Markdown" }
     );
 
     if (type === "expense") {
-      await checkAndSendExpenseAlert(userId, amount, fullDesc);
+      await checkAndSendExpenseAlert(userId, amount, cleanDesc);
     }
   } catch (error) {
     console.error("Failed to save telegram transaction:", error);

@@ -15,6 +15,13 @@
       "when": 1786068627860,
       "tag": "0001_tense_ultimates",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1786168009658,
+      "tag": "0002_grey_klaw",
+      "breakpoints": true
     }
   ]
 }

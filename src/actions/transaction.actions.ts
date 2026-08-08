@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { transactionSchema } from "@/lib/validations";
 import * as transactionRepo from "@/repositories/transaction.repository";
 import * as budgetRepo from "@/repositories/budget.repository";
+import * as walletRepo from "@/repositories/wallet.repository";
 import { revalidatePath } from "next/cache";
 
 async function getSessionUserId() {
@@ -229,12 +230,15 @@ export async function getDashboardCombinedAction() {
     percentage: grandTotal > 0 ? (r.total / grandTotal) * 100 : 0,
   }));
 
+  const walletStats = await walletRepo.getWalletStats(userId);
+
   return {
     stats: {
       totalIncome: incomeTotal,
       totalExpense: expenseTotal,
       balance: incomeTotal - expenseTotal,
     },
+    walletStats,
     recentTx,
     budgets,
     savingGoals,

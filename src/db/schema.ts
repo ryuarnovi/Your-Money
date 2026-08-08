@@ -279,6 +279,49 @@ export const emergencyFundHistories = sqliteTable("emergency_fund_histories", {
     .$defaultFn(() => new Date()),
 });
 
+export const wallets = sqliteTable("wallets", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  type: text("type", { enum: ["cash", "bank", "emoney"] })
+    .notNull()
+    .default("bank"),
+  accountNumber: text("account_number"),
+  initialBalance: real("initial_balance").notNull().default(0),
+  color: text("color").default("#3b82f6"),
+  icon: text("icon").default("Wallet"),
+  isDefault: integer("is_default", { mode: "boolean" }).default(false),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .$defaultFn(() => new Date()),
+});
+
+export const walletTransfers = sqliteTable("wallet_transfers", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  fromWalletId: text("from_wallet_id")
+    .notNull()
+    .references(() => wallets.id, { onDelete: "cascade" }),
+  toWalletId: text("to_wallet_id")
+    .notNull()
+    .references(() => wallets.id, { onDelete: "cascade" }),
+  amount: real("amount").notNull(),
+  fee: real("fee").default(0),
+  description: text("description"),
+  date: integer("date", { mode: "timestamp" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .$defaultFn(() => new Date()),
+});
+
 // ============================================
 // RELATIONS
 // ============================================
@@ -294,6 +337,8 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   settings: one(settings),
   telegramUser: one(telegramUsers),
   emergencyFund: one(emergencyFunds),
+  wallets: many(wallets),
+  walletTransfers: many(walletTransfers),
   auditLogs: many(auditLogs),
 }));
 
@@ -414,6 +459,35 @@ export const emergencyFundHistoriesRelations = relations(
     fund: one(emergencyFunds, {
       fields: [emergencyFundHistories.fundId],
       references: [emergencyFunds.id],
+    }),
+  })
+);
+
+export const walletsRelations = relations(wallets, ({ one, many }) => ({
+  user: one(users, {
+    fields: [wallets.userId],
+    references: [users.id],
+  }),
+  transfersFrom: many(walletTransfers, { relationName: "transfersFrom" }),
+  transfersTo: many(walletTransfers, { relationName: "transfersTo" }),
+}));
+
+export const walletTransfersRelations = relations(
+  walletTransfers,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [walletTransfers.userId],
+      references: [users.id],
+    }),
+    fromWallet: one(wallets, {
+      fields: [walletTransfers.fromWalletId],
+      references: [wallets.id],
+      relationName: "transfersFrom",
+    }),
+    toWallet: one(wallets, {
+      fields: [walletTransfers.toWalletId],
+      references: [wallets.id],
+      relationName: "transfersTo",
     }),
   })
 );

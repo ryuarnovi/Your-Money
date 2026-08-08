@@ -34,6 +34,7 @@ import {
   Monitor,
   ChevronLeft,
   DollarSign,
+  Landmark,
 } from "lucide-react";
 import { getInitials } from "@/utils";
 import { useState } from "react";
@@ -41,6 +42,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Dompet & Bank", href: "/accounts", icon: Landmark },
   { name: "Transaksi", href: "/transactions", icon: ArrowLeftRight },
   { name: "Budget", href: "/budget", icon: Wallet },
   { name: "Tabungan", href: "/savings", icon: PiggyBank },

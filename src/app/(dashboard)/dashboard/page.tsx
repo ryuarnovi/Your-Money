@@ -18,6 +18,10 @@ import {
   CalendarClock,
   Plus,
   ArrowLeftRight,
+  Landmark,
+  Building2,
+  Banknote,
+  Smartphone,
 } from "lucide-react";
 import { formatCurrency, formatCompactCurrency, formatRelativeDate, formatDate } from "@/utils";
 import { getRecentTransactionsAction, getDashboardStatsAction, getCategoryBreakdownAction } from "@/actions/transaction.actions";
@@ -97,6 +101,8 @@ export default function DashboardPage() {
   const [expenseCategories, setExpenseCategories] = useState<CategoryItem[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [walletStats, setWalletStats] = useState<{ totalCash: number; totalBank: number; totalEmoney: number; totalOverall: number } | null>(null);
+
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
@@ -105,6 +111,7 @@ export default function DashboardPage() {
         const combined = await getDashboardCombinedAction();
 
         setStats(combined.stats);
+        setWalletStats((combined as any).walletStats || null);
         setRecentTx(combined.recentTx as Transaction[]);
         setBudgets(combined.budgets as BudgetItem[]);
         setGoals(combined.savingGoals as SavingGoalItem[]);
@@ -234,6 +241,64 @@ export default function DashboardPage() {
           </Card>
         </motion.div>
       </div>
+
+      {/* Dompet & Bank Breakdown Widget */}
+      {walletStats && (
+        <motion.div variants={item}>
+          <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+            <CardHeader className="py-3 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Landmark className="w-4 h-4 text-primary" />
+                Alokasi Saldo Akun (Kas, Bank, & E-Money)
+              </CardTitle>
+              <Link href="/accounts">
+                <Button variant="ghost" size="sm" className="text-xs h-7">
+                  Kelola Akun ➔
+                </Button>
+              </Link>
+            </CardHeader>
+            <CardContent className="pb-4 pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                      <Building2 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-medium text-muted-foreground uppercase">Bank</p>
+                      <p className="text-sm font-bold text-foreground">{formatCurrency(walletStats.totalBank)}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                      <Banknote className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-medium text-muted-foreground uppercase">Kas Tunai (Cash)</p>
+                      <p className="text-sm font-bold text-foreground">{formatCurrency(walletStats.totalCash)}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                      <Smartphone className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-medium text-muted-foreground uppercase">E-Money / Wallet</p>
+                      <p className="text-sm font-bold text-foreground">{formatCurrency(walletStats.totalEmoney)}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
