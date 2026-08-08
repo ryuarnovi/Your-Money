@@ -36,6 +36,9 @@ Aplikasi Personal Money Management production-ready yang dibangun menggunakan Ne
 ![Pengaturan Aplikasi](documentation/setting.png)
 ![Tampilan Mode Terang](documentation/light-mode.png)
 
+### Integrasi Telegram Bot
+![Telegram Bot Integrasi](documentation/bot-telegram.png)
+
 ---
 
 ## Fitur Utama
