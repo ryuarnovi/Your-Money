@@ -118,6 +118,7 @@ export async function getPaymentMethodBreakdownAction(startDate?: string, endDat
 
 export async function getDashboardCombinedAction() {
   const userId = await getSessionUserId();
+  await budgetRepo.updateBudgetSpent(userId);
   const { executeBatch } = await import("@/db/client");
 
   const now = Math.floor(Date.now() / 1000);

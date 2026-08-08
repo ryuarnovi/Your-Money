@@ -76,14 +76,29 @@ export default function BudgetPage() {
     }
 
     const now = new Date();
-    const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    let startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+    let endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+    if (period === "weekly") {
+      const day = now.getDay();
+      const diffToMon = now.getDate() - day + (day === 0 ? -6 : 1);
+      startDate = new Date(now.setDate(diffToMon));
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 6);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (period === "yearly") {
+      startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+    }
+
+    const selectedCatId = categoryId === "all_categories" ? undefined : (categoryId || undefined);
 
     try {
       await createBudgetAction({
         name,
         amount: Number(amount),
-        categoryId: categoryId || undefined,
+        categoryId: selectedCatId,
         period,
         startDate,
         endDate,
@@ -93,6 +108,7 @@ export default function BudgetPage() {
       setOpenCreate(false);
       setName("");
       setAmount("");
+      setCategoryId("");
       loadData();
     } catch {
       toast.error("Gagal membuat budget");

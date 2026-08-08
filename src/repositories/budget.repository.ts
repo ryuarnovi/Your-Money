@@ -19,7 +19,38 @@ interface BudgetRow {
   category_color?: string;
 }
 
+export async function updateBudgetSpent(userId: string) {
+  // 1. Cleanup any legacy 'all_categories' string saved in category_id column
+  await executeQuery(
+    "UPDATE budgets SET category_id = NULL WHERE user_id = ? AND category_id = 'all_categories'",
+    [userId]
+  );
+
+  // 2. Recalculate spent for budgets:
+  // If category_id is NULL or empty, sum ALL expense transactions in the period.
+  // If category_id is set, sum ONLY expense transactions matching that category_id in the period.
+  await executeQuery(
+    `UPDATE budgets SET spent = (
+       SELECT COALESCE(SUM(t.amount), 0)
+       FROM transactions t
+       WHERE t.user_id = budgets.user_id
+         AND t.type = 'expense'
+         AND (
+           budgets.category_id IS NULL 
+           OR budgets.category_id = '' 
+           OR budgets.category_id = 'all_categories'
+           OR t.category_id = budgets.category_id
+         )
+         AND t.date >= budgets.start_date
+         AND t.date <= budgets.end_date
+     ) WHERE user_id = ?`,
+    [userId]
+  );
+}
+
 export async function getBudgets(userId: string) {
+  await updateBudgetSpent(userId);
+
   const rows = await queryAll<BudgetRow>(
     `SELECT b.*, c.name as category_name, c.icon as category_icon, c.color as category_color
      FROM budgets b
@@ -33,6 +64,8 @@ export async function getBudgets(userId: string) {
 }
 
 export async function getBudgetById(id: string, userId: string) {
+  await updateBudgetSpent(userId);
+
   const row = await queryOne<BudgetRow>(
     `SELECT b.*, c.name as category_name, c.icon as category_icon, c.color as category_color
      FROM budgets b
@@ -55,12 +88,17 @@ export async function createBudget(data: {
 }) {
   const id = generateId();
   const now = Math.floor(Date.now() / 1000);
+  const catId = data.categoryId && data.categoryId !== "all_categories" ? data.categoryId : null;
 
   await executeQuery(
     `INSERT INTO budgets (id, user_id, category_id, name, amount, spent, period, start_date, end_date, created_at)
      VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
     [
-      id, data.userId, data.categoryId || null, data.name, data.amount,
+      id,
+      data.userId,
+      catId,
+      data.name,
+      data.amount,
       data.period,
       Math.floor(data.startDate.getTime() / 1000),
       Math.floor(data.endDate.getTime() / 1000),
@@ -68,6 +106,7 @@ export async function createBudget(data: {
     ]
   );
 
+  await updateBudgetSpent(data.userId);
   return id;
 }
 
@@ -84,7 +123,11 @@ export async function updateBudget(id: string, userId: string, data: Partial<{
   const params: unknown[] = [];
 
   if (data.name !== undefined) { updates.push("name = ?"); params.push(data.name); }
-  if (data.categoryId !== undefined) { updates.push("category_id = ?"); params.push(data.categoryId); }
+  if (data.categoryId !== undefined) {
+    const catId = data.categoryId && data.categoryId !== "all_categories" ? data.categoryId : null;
+    updates.push("category_id = ?");
+    params.push(catId);
+  }
   if (data.amount !== undefined) { updates.push("amount = ?"); params.push(data.amount); }
   if (data.spent !== undefined) { updates.push("spent = ?"); params.push(data.spent); }
   if (data.period !== undefined) { updates.push("period = ?"); params.push(data.period); }
@@ -99,6 +142,8 @@ export async function updateBudget(id: string, userId: string, data: Partial<{
     `UPDATE budgets SET ${updates.join(", ")} WHERE id = ? AND user_id = ?`,
     params
   );
+
+  await updateBudgetSpent(userId);
 }
 
 export async function deleteBudget(id: string, userId: string) {
@@ -108,25 +153,9 @@ export async function deleteBudget(id: string, userId: string) {
   );
 }
 
-export async function updateBudgetSpent(userId: string) {
-  // Recalculate spent for all active budgets
-  const now = Math.floor(Date.now() / 1000);
-
-  await executeQuery(
-    `UPDATE budgets SET spent = (
-       SELECT COALESCE(SUM(t.amount), 0)
-       FROM transactions t
-       WHERE t.user_id = budgets.user_id
-         AND t.type = 'expense'
-         AND (budgets.category_id IS NULL OR t.category_id = budgets.category_id)
-         AND t.date >= budgets.start_date
-         AND t.date <= budgets.end_date
-     ) WHERE user_id = ? AND end_date >= ?`,
-    [userId, now]
-  );
-}
-
 export async function getActiveBudgets(userId: string) {
+  await updateBudgetSpent(userId);
+
   const now = Math.floor(Date.now() / 1000);
 
   const rows = await queryAll<BudgetRow>(
