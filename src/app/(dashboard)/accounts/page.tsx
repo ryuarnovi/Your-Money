@@ -22,7 +22,7 @@ import {
   TrendingUp,
   CreditCard,
 } from "lucide-react";
-import { formatCurrency, formatDate } from "@/utils";
+import { formatCurrency, formatDate, formatNumberWithDots, parseCurrencyInput } from "@/utils";
 import {
   getWalletsAction,
   getWalletStatsAction,
@@ -122,7 +122,7 @@ export default function AccountsPage() {
         name,
         type,
         accountNumber: accountNumber.trim() || undefined,
-        initialBalance: Number(initialBalance) || 0,
+        initialBalance: parseCurrencyInput(initialBalance),
         color,
       });
 
@@ -157,7 +157,7 @@ export default function AccountsPage() {
       toast.error("Akun asal dan tujuan tidak boleh sama");
       return;
     }
-    const amt = Number(transferAmount);
+    const amt = parseCurrencyInput(transferAmount);
     if (!amt || amt <= 0) {
       toast.error("Nominal transfer harus lebih besar dari 0");
       return;
@@ -169,7 +169,7 @@ export default function AccountsPage() {
         fromWalletId,
         toWalletId,
         amount: amt,
-        fee: Number(transferFee) || 0,
+        fee: parseCurrencyInput(transferFee),
         description: transferDesc.trim() || undefined,
         date: new Date(),
       });
@@ -276,20 +276,20 @@ export default function AccountsPage() {
                 <div className="space-y-2">
                   <Label>Nominal Transfer (Rp)</Label>
                   <Input
-                    type="number"
-                    placeholder="100000"
+                    type="text"
+                    placeholder="100.000"
                     value={transferAmount}
-                    onChange={(e) => setTransferAmount(e.target.value)}
+                    onChange={(e) => setTransferAmount(formatNumberWithDots(e.target.value))}
                   />
                 </div>
 
                 <div className="space-y-2">
                   <Label>Biaya Admin (Opsional)</Label>
                   <Input
-                    type="number"
-                    placeholder="2500"
+                    type="text"
+                    placeholder="2.500"
                     value={transferFee}
-                    onChange={(e) => setTransferFee(e.target.value)}
+                    onChange={(e) => setTransferFee(formatNumberWithDots(e.target.value))}
                   />
                 </div>
 
@@ -358,10 +358,10 @@ export default function AccountsPage() {
                 <div className="space-y-2">
                   <Label>Saldo Awal (Rp)</Label>
                   <Input
-                    type="number"
-                    placeholder="1000000"
+                    type="text"
+                    placeholder="1.000.000"
                     value={initialBalance}
-                    onChange={(e) => setInitialBalance(e.target.value)}
+                    onChange={(e) => setInitialBalance(formatNumberWithDots(e.target.value))}
                   />
                 </div>
 
