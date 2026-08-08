@@ -22,40 +22,13 @@ export async function loginAction(formData: unknown) {
   }
 }
 
-export async function registerAction(formData: unknown) {
-  const validated = registerSchema.parse(formData);
-
-  const existingUser = await userRepo.getUserByEmail(validated.email);
-  if (existingUser) {
-    return { success: false, error: "Email sudah terdaftar" };
-  }
-
-  try {
-    await userRepo.createUser({
-      name: validated.name,
-      email: validated.email,
-      password: validated.password,
-    });
-
-    await signIn("credentials", {
-      email: validated.email,
-      password: validated.password,
-      redirect: false,
-    });
-
-    return { success: true };
-  } catch {
-    return { success: false, error: "Gagal mendaftar. Coba lagi." };
-  }
+export async function registerAction() {
+  return { success: false, error: "Pendaftaran akun baru telah dinonaktifkan (Penggunaan Pribadi)." };
 }
 
 export async function logoutAction() {
   await signOut({ redirect: false });
   return { success: true };
-}
-
-export async function googleLoginAction() {
-  await signIn("google", { redirectTo: "/dashboard" });
 }
 
 export async function changePasswordAction(formData: unknown) {
