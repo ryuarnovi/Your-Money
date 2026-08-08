@@ -21,12 +21,14 @@ import {
   CheckCircle2,
   TrendingUp,
   CreditCard,
+  Pencil,
 } from "lucide-react";
 import { formatCurrency, formatDate, formatNumberWithDots, parseCurrencyInput } from "@/utils";
 import {
   getWalletsAction,
   getWalletStatsAction,
   createWalletAction,
+  updateWalletAction,
   deleteWalletAction,
   transferBetweenWalletsAction,
   getWalletTransfersAction,
@@ -134,6 +136,48 @@ export default function AccountsPage() {
       loadData();
     } catch {
       toast.error("Gagal membuat akun baru");
+    }
+  }
+
+  // Edit Wallet Form
+  const [openEdit, setOpenEdit] = useState(false);
+  const [editingId, setEditingId] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editType, setEditType] = useState<"cash" | "bank" | "emoney">("bank");
+  const [editAccountNumber, setEditAccountNumber] = useState("");
+  const [editInitialBalance, setEditInitialBalance] = useState("");
+  const [editColor, setEditColor] = useState("#3b82f6");
+
+  function handleStartEdit(w: WalletItem) {
+    setEditingId(w.id);
+    setEditName(w.name);
+    setEditType(w.type);
+    setEditAccountNumber(w.accountNumber || "");
+    setEditInitialBalance(formatNumberWithDots(w.initialBalance));
+    setEditColor(w.color || "#3b82f6");
+    setOpenEdit(true);
+  }
+
+  async function handleUpdateWallet() {
+    if (!editName.trim()) {
+      toast.error("Nama akun wajib diisi");
+      return;
+    }
+
+    try {
+      await updateWalletAction(editingId, {
+        name: editName,
+        type: editType,
+        accountNumber: editAccountNumber.trim() || undefined,
+        initialBalance: parseCurrencyInput(editInitialBalance),
+        color: editColor,
+      });
+
+      toast.success(`Akun "${editName}" berhasil diperbarui!`);
+      setOpenEdit(false);
+      loadData();
+    } catch {
+      toast.error("Gagal memperbarui akun");
     }
   }
 
@@ -503,14 +547,24 @@ export default function AccountsPage() {
 
                   <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t border-border/40">
                     <span>Saldo Awal: {formatCurrency(w.initialBalance)}</span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                      onClick={() => handleDeleteWallet(w.id, w.name)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-muted-foreground hover:text-primary"
+                        onClick={() => handleStartEdit(w)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleDeleteWallet(w.id, w.name)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -518,6 +572,78 @@ export default function AccountsPage() {
           })}
         </div>
       </div>
+
+      {/* Edit Wallet Dialog */}
+      <Dialog open={openEdit} onOpenChange={setOpenEdit}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Akun Keuangan</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Nama Akun / Dompet</Label>
+              <Input
+                placeholder="Misal: BCA Tabungan"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Tipe Akun</Label>
+              <Select value={editType} onValueChange={(val: any) => val && setEditType(val)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bank">Bank Transfer (BCA, Mandiri, BRI, dll)</SelectItem>
+                  <SelectItem value="cash">Kas Tunai (Physical Cash)</SelectItem>
+                  <SelectItem value="emoney">E-Money (GoPay, OVO, DANA, QRIS, dll)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Nomor Rekening / No. HP (Opsional)</Label>
+              <Input
+                placeholder="8820492819"
+                value={editAccountNumber}
+                onChange={(e) => setEditAccountNumber(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Saldo Awal (Rp)</Label>
+              <Input
+                type="text"
+                placeholder="1.000.000"
+                value={editInitialBalance}
+                onChange={(e) => setEditInitialBalance(formatNumberWithDots(e.target.value))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Warna Identifikasi</Label>
+              <div className="flex gap-2">
+                {["#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ef4444", "#ec4899"].map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    className="w-7 h-7 rounded-full border-2 transition-transform hover:scale-110 flex items-center justify-center"
+                    style={{ backgroundColor: c, borderColor: editColor === c ? "#ffffff" : "transparent" }}
+                    onClick={() => setEditColor(c)}
+                  >
+                    {editColor === c && <CheckCircle2 className="w-4 h-4 text-white" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={handleUpdateWallet}>Simpan Perubahan</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Transfer History Table */}
       {transfers.length > 0 && (
