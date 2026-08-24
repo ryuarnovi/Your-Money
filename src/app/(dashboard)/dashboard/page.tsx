@@ -102,6 +102,15 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   const [walletStats, setWalletStats] = useState<{ totalCash: number; totalBank: number; totalEmoney: number; totalOverall: number } | null>(null);
+  const [finSummary, setFinSummary] = useState<{
+    totalAsset: number;
+    allocatedSavings: number;
+    availableBalance: number;
+    realExpenseThisMonth: number;
+    incomeThisMonth: number;
+    transferThisMonth: number;
+    netCashflow: number;
+  } | null>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -112,6 +121,7 @@ export default function DashboardPage() {
 
         setStats(combined.stats);
         setWalletStats((combined as any).walletStats || null);
+        setFinSummary((combined as any).financialSummary || null);
         setRecentTx(combined.recentTx as Transaction[]);
         setBudgets(combined.budgets as BudgetItem[]);
         setGoals(combined.savingGoals as SavingGoalItem[]);
@@ -171,72 +181,112 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* 6 Core Financial Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        {/* Total Asset */}
         <motion.div variants={item}>
-          <Card className="relative overflow-hidden border-border/50 bg-card/80 backdrop-blur-sm">
-            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-blue-500/10 to-transparent rounded-bl-full" />
-            <CardContent className="p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="p-2 rounded-lg bg-blue-500/10">
-                  <Wallet className="h-4 w-4 text-blue-500" />
+          <Card className="relative overflow-hidden border-blue-500/20 bg-blue-500/5 backdrop-blur-sm">
+            <CardContent className="p-3.5">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500">
+                  <Wallet className="h-4 w-4" />
                 </div>
-                <span className="text-xs font-medium text-muted-foreground">Total Saldo</span>
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Asset</span>
               </div>
-              <p className="text-lg md:text-2xl font-bold tracking-tight">
-                {formatCompactCurrency(stats?.balance || 0)}
+              <p className="text-base font-bold tracking-tight text-foreground">
+                {formatCurrency(finSummary?.totalAsset || walletStats?.totalOverall || 0)}
               </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Semua Rekening</p>
             </CardContent>
           </Card>
         </motion.div>
 
+        {/* Available Balance */}
         <motion.div variants={item}>
-          <Card className="relative overflow-hidden border-border/50 bg-card/80 backdrop-blur-sm">
-            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-emerald-500/10 to-transparent rounded-bl-full" />
-            <CardContent className="p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="p-2 rounded-lg bg-emerald-500/10">
-                  <ArrowUpRight className="h-4 w-4 text-emerald-500" />
+          <Card className="relative overflow-hidden border-emerald-500/20 bg-emerald-500/5 backdrop-blur-sm">
+            <CardContent className="p-3.5">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500">
+                  <Landmark className="h-4 w-4" />
                 </div>
-                <span className="text-xs font-medium text-muted-foreground">Pemasukan</span>
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Available</span>
               </div>
-              <p className="text-lg md:text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
-                {formatCompactCurrency(stats?.totalIncome || 0)}
+              <p className="text-base font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
+                {formatCurrency(finSummary?.availableBalance || 0)}
               </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Uang Operasional</p>
             </CardContent>
           </Card>
         </motion.div>
 
+        {/* Allocated / Savings */}
         <motion.div variants={item}>
-          <Card className="relative overflow-hidden border-border/50 bg-card/80 backdrop-blur-sm">
-            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-rose-500/10 to-transparent rounded-bl-full" />
-            <CardContent className="p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="p-2 rounded-lg bg-rose-500/10">
-                  <ArrowDownRight className="h-4 w-4 text-rose-500" />
+          <Card className="relative overflow-hidden border-violet-500/20 bg-violet-500/5 backdrop-blur-sm">
+            <CardContent className="p-3.5">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <div className="p-1.5 rounded-lg bg-violet-500/10 text-violet-500">
+                  <PiggyBank className="h-4 w-4" />
                 </div>
-                <span className="text-xs font-medium text-muted-foreground">Pengeluaran</span>
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Allocated</span>
               </div>
-              <p className="text-lg md:text-2xl font-bold tracking-tight text-rose-600 dark:text-rose-400">
-                {formatCompactCurrency(stats?.totalExpense || 0)}
+              <p className="text-base font-bold tracking-tight text-violet-600 dark:text-violet-400">
+                {formatCurrency(finSummary?.allocatedSavings || totalSaving || 0)}
               </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Kuliah, HP, Emergency</p>
             </CardContent>
           </Card>
         </motion.div>
 
+        {/* Real Expense This Month */}
         <motion.div variants={item}>
-          <Card className="relative overflow-hidden border-border/50 bg-card/80 backdrop-blur-sm">
-            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-violet-500/10 to-transparent rounded-bl-full" />
-            <CardContent className="p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="p-2 rounded-lg bg-violet-500/10">
-                  <PiggyBank className="h-4 w-4 text-violet-500" />
+          <Card className="relative overflow-hidden border-rose-500/20 bg-rose-500/5 backdrop-blur-sm">
+            <CardContent className="p-3.5">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-500">
+                  <ArrowDownRight className="h-4 w-4" />
                 </div>
-                <span className="text-xs font-medium text-muted-foreground">Tabungan</span>
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Real Expense</span>
               </div>
-              <p className="text-lg md:text-2xl font-bold tracking-tight">
-                {formatCompactCurrency(totalSaving)}
+              <p className="text-base font-bold tracking-tight text-rose-600 dark:text-rose-400">
+                {formatCurrency(finSummary?.realExpenseThisMonth || stats?.totalExpense || 0)}
               </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Bulan Ini (Excl. Transfer)</p>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Income This Month */}
+        <motion.div variants={item}>
+          <Card className="relative overflow-hidden border-amber-500/20 bg-amber-500/5 backdrop-blur-sm">
+            <CardContent className="p-3.5">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500">
+                  <ArrowUpRight className="h-4 w-4" />
+                </div>
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Income</span>
+              </div>
+              <p className="text-base font-bold tracking-tight text-amber-600 dark:text-amber-400">
+                {formatCurrency(finSummary?.incomeThisMonth || stats?.totalIncome || 0)}
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Bulan Ini (Gaji & Bonus)</p>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Transfer This Month */}
+        <motion.div variants={item}>
+          <Card className="relative overflow-hidden border-indigo-500/20 bg-indigo-500/5 backdrop-blur-sm">
+            <CardContent className="p-3.5">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-500">
+                  <ArrowLeftRight className="h-4 w-4" />
+                </div>
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Transfer</span>
+              </div>
+              <p className="text-base font-bold tracking-tight text-indigo-600 dark:text-indigo-400">
+                {formatCurrency(finSummary?.transferThisMonth || 0)}
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Transfer Antar Akun</p>
             </CardContent>
           </Card>
         </motion.div>

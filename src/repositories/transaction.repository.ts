@@ -222,11 +222,52 @@ export async function getTransactionStats(userId: string, startDate?: Date, endD
   };
 }
 
+export async function detectLegacyTransfers(userId: string) {
+  const rows = await queryAll<TransactionRow>(
+    `SELECT t.*, c.name as category_name
+     FROM transactions t
+     LEFT JOIN categories c ON t.category_id = c.id
+     WHERE t.user_id = ? AND t.type IN ('expense', 'income')
+     AND (t.description LIKE '%transfer%' OR t.description LIKE '%tf %' OR t.description LIKE '%tarik tunai%' OR t.description LIKE '%topup%')
+     ORDER BY t.date DESC`,
+    [userId]
+  );
+
+  return rows.map(mapTransactionRow);
+}
+
+export async function convertLegacyTransferToRealTransfer(
+  txId: string,
+  userId: string,
+  fromWalletId: string,
+  toWalletId: string
+) {
+  const tx = await queryOne<TransactionRow>(
+    `SELECT * FROM transactions WHERE id = ? AND user_id = ?`,
+    [txId, userId]
+  );
+  if (!tx) throw new Error("Transaksi tidak ditemukan.");
+
+  // Delete old expense/income transaction
+  await executeQuery("DELETE FROM transactions WHERE id = ? AND user_id = ?", [txId, userId]);
+
+  // Insert into wallet_transfers
+  const id = generateId();
+  const now = Math.floor(Date.now() / 1000);
+  await executeQuery(
+    `INSERT INTO wallet_transfers (id, user_id, from_wallet_id, to_wallet_id, amount, fee, description, date, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, userId, fromWalletId, toWalletId, tx.amount, 0, tx.description || "Transfer Konversi", tx.date, now]
+  );
+
+  return id;
+}
+
 export async function getCashflowData(userId: string, startDate: Date, endDate: Date) {
   const rows = await queryAll<{ date: string; type: string; total: number }>(
     `SELECT date(date, 'unixepoch') as date, type, SUM(amount) as total
      FROM transactions
-     WHERE user_id = ? AND date >= ? AND date <= ?
+     WHERE user_id = ? AND type IN ('income', 'expense') AND date >= ? AND date <= ?
      GROUP BY date(date, 'unixepoch'), type
      ORDER BY date ASC`,
     [userId, Math.floor(startDate.getTime() / 1000), Math.floor(endDate.getTime() / 1000)]

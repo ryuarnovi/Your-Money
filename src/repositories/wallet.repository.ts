@@ -236,6 +236,55 @@ export async function getWalletStats(userId: string): Promise<WalletStats> {
   };
 }
 
+export async function getDashboardFinancialSummary(userId: string) {
+  const wallets = await getWallets(userId);
+  const totalAsset = wallets.reduce((sum, w) => sum + w.currentBalance, 0);
+
+  // Get total allocated in saving goals
+  const goalsRes = await queryOne<{ total: number }>(
+    `SELECT COALESCE(SUM(current_amount), 0) as total FROM saving_goals WHERE user_id = ?`,
+    [userId]
+  );
+  const allocatedSavings = goalsRes?.total || 0;
+  const availableBalance = totalAsset - allocatedSavings;
+
+  // Monthly Date Range (Current Month)
+  const now = new Date();
+  const startOfMonthTs = Math.floor(new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0).getTime() / 1000);
+  const endOfMonthTs = Math.floor(new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).getTime() / 1000);
+
+  // Monthly Real Expense (murni type = 'expense')
+  const expenseRes = await queryOne<{ total: number }>(
+    `SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE user_id = ? AND type = 'expense' AND date >= ? AND date <= ?`,
+    [userId, startOfMonthTs, endOfMonthTs]
+  );
+  const realExpenseThisMonth = expenseRes?.total || 0;
+
+  // Monthly Real Income (murni type = 'income')
+  const incomeRes = await queryOne<{ total: number }>(
+    `SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE user_id = ? AND type = 'income' AND date >= ? AND date <= ?`,
+    [userId, startOfMonthTs, endOfMonthTs]
+  );
+  const incomeThisMonth = incomeRes?.total || 0;
+
+  // Monthly Transfers
+  const transferRes = await queryOne<{ total: number }>(
+    `SELECT COALESCE(SUM(amount), 0) as total FROM wallet_transfers WHERE user_id = ? AND date >= ? AND date <= ?`,
+    [userId, startOfMonthTs, endOfMonthTs]
+  );
+  const transferThisMonth = transferRes?.total || 0;
+
+  return {
+    totalAsset,
+    allocatedSavings,
+    availableBalance,
+    realExpenseThisMonth,
+    incomeThisMonth,
+    transferThisMonth,
+    netCashflow: incomeThisMonth - realExpenseThisMonth,
+  };
+}
+
 export async function createWallet(data: {
   userId: string;
   name: string;

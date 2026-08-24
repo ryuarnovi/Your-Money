@@ -18,6 +18,27 @@ export async function getTransactionsAction(filters = {}) {
   return transactionRepo.getTransactions(userId, filters);
 }
 
+export async function getDashboardFinancialSummaryAction() {
+  const userId = await getSessionUserId();
+  return walletRepo.getDashboardFinancialSummary(userId);
+}
+
+export async function detectLegacyTransfersAction() {
+  const userId = await getSessionUserId();
+  return transactionRepo.detectLegacyTransfers(userId);
+}
+
+export async function convertLegacyTransferAction(txId: string, fromWalletId: string, toWalletId: string) {
+  const userId = await getSessionUserId();
+  const id = await transactionRepo.convertLegacyTransferToRealTransfer(txId, userId, fromWalletId, toWalletId);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/transactions");
+  revalidatePath("/accounts");
+
+  return { success: true, id };
+}
+
 export async function getTransactionByIdAction(id: string) {
   const userId = await getSessionUserId();
   return transactionRepo.getTransactionById(id, userId);
@@ -232,12 +253,15 @@ export async function getDashboardCombinedAction() {
 
   const walletStats = await walletRepo.getWalletStats(userId);
 
+  const financialSummary = await walletRepo.getDashboardFinancialSummary(userId);
+
   return {
     stats: {
       totalIncome: incomeTotal,
       totalExpense: expenseTotal,
       balance: incomeTotal - expenseTotal,
     },
+    financialSummary,
     walletStats,
     recentTx,
     budgets,

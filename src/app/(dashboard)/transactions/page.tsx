@@ -218,9 +218,10 @@ export default function TransactionsPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="expense">Pengeluaran (-)</SelectItem>
-                      <SelectItem value="income">Pemasukan (+)</SelectItem>
-                      <SelectItem value="transfer">Transfer (⇄)</SelectItem>
+                      <SelectItem value="expense">🔴 Pengeluaran (Expense)</SelectItem>
+                      <SelectItem value="income">🟢 Pemasukan (Income)</SelectItem>
+                      <SelectItem value="transfer">⇄ Transfer Antar Rekening</SelectItem>
+                      <SelectItem value="allocation">🔒 Alokasi Tabungan / Goal</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
