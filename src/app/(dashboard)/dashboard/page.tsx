@@ -181,8 +181,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 6 Core Financial Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      {/* 5 Core Financial Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         {/* Total Asset */}
         <motion.div variants={item}>
           <Card className="relative overflow-hidden border-blue-500/20 bg-blue-500/5 backdrop-blur-sm">
@@ -215,24 +215,6 @@ export default function DashboardPage() {
                 {formatCurrency(finSummary?.availableBalance || 0)}
               </p>
               <p className="text-[10px] text-muted-foreground mt-0.5">Uang Operasional</p>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Allocated / Savings */}
-        <motion.div variants={item}>
-          <Card className="relative overflow-hidden border-violet-500/20 bg-violet-500/5 backdrop-blur-sm">
-            <CardContent className="p-3.5">
-              <div className="flex items-center gap-1.5 mb-1.5">
-                <div className="p-1.5 rounded-lg bg-violet-500/10 text-violet-500">
-                  <PiggyBank className="h-4 w-4" />
-                </div>
-                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Allocated</span>
-              </div>
-              <p className="text-base font-bold tracking-tight text-violet-600 dark:text-violet-400">
-                {formatCurrency(finSummary?.allocatedSavings || totalSaving || 0)}
-              </p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Kuliah, HP, Emergency</p>
             </CardContent>
           </Card>
         </motion.div>
