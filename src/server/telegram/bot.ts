@@ -425,26 +425,38 @@ bot.on("message:text", async (ctx) => {
     );
   }
 
-  // Check 2: Allocation / Tabungan command (e.g., 'alokasi 1.450.000 Dana Kuliah' OR 'alokasi Bank Jateng 1.450.000 tabungan Kuliah' OR 'alokasi campus 1.450.000 tabungan kuliah')
+  // Check 2: Allocation / Tabungan command (e.g., 'alokasi campus 1.450.000 tabungan kuliah 6.600.000' OR 'alokasi 1.450.000 Dana Kuliah')
   const isAllocCmd = text.match(/^(alokasi|tabungan|simpan|goal)\b/i);
   if (isAllocCmd) {
-    // Extract the amount string
-    const amtMatch = text.match(/([0-9]{1,3}(?:\.[0-9]{3})+|[0-9]{4,})/);
-    if (!amtMatch) {
-      return ctx.reply("⚠️ Format nominal alokasi tidak valid. Contoh:\n`alokasi Bank Jateng 1.450.000 tabungan Kuliah`", { parse_mode: "Markdown" });
+    // Find all numbers in text
+    const numberMatches = Array.from(text.matchAll(/([0-9]{1,3}(?:\.[0-9]{3})+|[0-9]{4,})/g));
+    if (numberMatches.length === 0) {
+      return ctx.reply("⚠️ Format nominal alokasi tidak valid. Contoh:\n`alokasi campus 1.450.000 tabungan kuliah 6.600.000`", { parse_mode: "Markdown" });
     }
 
-    const rawAmtStr = amtMatch[0];
+    // 1st number = Allocation amount
+    const firstMatch = numberMatches[0];
+    const rawAmtStr = firstMatch[0];
     const rawAmt = Number(rawAmtStr.replace(/[^0-9]/g, ""));
-    const amtIndex = text.indexOf(rawAmtStr);
+    const firstAmtIndex = firstMatch.index!;
 
-    const beforeAmt = text.substring(isAllocCmd[0].length, amtIndex).trim(); // Wallet source if specified (e.g. 'Bank Jateng', 'campus')
-    const afterAmt = text.substring(amtIndex + rawAmtStr.length).trim(); // Goal search string (e.g. 'tabungan Kuliah' or 'Dana Kuliah')
+    // 2nd number (if any) = Target amount
+    let targetAmt: number | undefined = undefined;
+    let secondAmtIndex = text.length;
+    if (numberMatches.length >= 2) {
+      const secondMatch = numberMatches[1];
+      const targetAmtStr = secondMatch[0];
+      targetAmt = Number(targetAmtStr.replace(/[^0-9]/g, ""));
+      secondAmtIndex = secondMatch.index!;
+    }
+
+    const beforeAmt = text.substring(isAllocCmd[0].length, firstAmtIndex).trim(); // Wallet source if specified (e.g. 'campus', 'Bank Jateng')
+    const betweenOrAfterAmt = text.substring(firstAmtIndex + rawAmtStr.length, secondAmtIndex).trim(); // Goal search string
 
     // Clean goal name: strip leading 'tabungan', 'ke', 'untuk', 'goal'
-    let goalSearch = afterAmt.replace(/^(tabungan|ke|untuk|goal)\s+/i, "").trim().toLowerCase();
+    let goalSearch = betweenOrAfterAmt.replace(/^(tabungan|ke|untuk|goal)\s+/i, "").trim().toLowerCase();
     if (!goalSearch) {
-      goalSearch = afterAmt.trim().toLowerCase();
+      goalSearch = betweenOrAfterAmt.trim().toLowerCase();
     }
 
     if (!rawAmt || isNaN(rawAmt)) {
@@ -487,10 +499,12 @@ bot.on("message:text", async (ctx) => {
 
       const newGoalId = generateId();
       const now = Math.floor(Date.now() / 1000);
+      const finalTarget = targetAmt || rawAmt;
+
       await executeQuery(
         `INSERT INTO saving_goals (id, user_id, name, target_amount, current_amount, icon, color, is_completed, created_at)
          VALUES (?, ?, ?, ?, ?, 'PiggyBank', '#3b82f6', 0, ?)`,
-        [newGoalId, userId, cleanName, rawAmt, rawAmt, now]
+        [newGoalId, userId, cleanName, finalTarget, rawAmt, now]
       );
 
       return ctx.reply(
@@ -498,17 +512,20 @@ bot.on("message:text", async (ctx) => {
         `• Target Goal: *${cleanName}*\n` +
         `• Akun Asal: *${walletSourceDisplayName}*\n` +
         `• Dialokasikan Pertama: *${formatCurrency(rawAmt)}*\n` +
-        `• Total Terkumpul: *${formatCurrency(rawAmt)}*\n\n` +
-        `💡 *Catatan*: Uang ini berada di *${walletSourceDisplayName}* & *TIDAK dihitung sebagai Pengeluaran*.`,
+        `• Total Target: *${formatCurrency(finalTarget)}*\n` +
+        `• Terkumpul: *${formatCurrency(rawAmt)}* (${Math.round((rawAmt / finalTarget) * 100)}%)\n\n` +
+        `💡 *Catatan*: Uang berada di *${walletSourceDisplayName}* & *TIDAK dihitung sebagai Pengeluaran*.`,
         { parse_mode: "Markdown" }
       );
     }
 
     if (matchedGoal) {
       const newAmt = (matchedGoal.current_amount || 0) + rawAmt;
+      const finalTarget = targetAmt || matchedGoal.target_amount || newAmt;
+
       await executeQuery(
-        "UPDATE saving_goals SET current_amount = ? WHERE id = ? AND user_id = ?",
-        [newAmt, matchedGoal.id, userId]
+        "UPDATE saving_goals SET current_amount = ?, target_amount = ? WHERE id = ? AND user_id = ?",
+        [newAmt, finalTarget, matchedGoal.id, userId]
       );
 
       return ctx.reply(
@@ -516,7 +533,8 @@ bot.on("message:text", async (ctx) => {
         `• Target Goal: *${matchedGoal.name}*\n` +
         `• Akun Asal: *${walletSourceDisplayName}*\n` +
         `• Nominal Dialokasikan: *${formatCurrency(rawAmt)}*\n` +
-        `• Total Terkumpul: *${formatCurrency(newAmt)}* / ${formatCurrency(matchedGoal.target_amount)}\n\n` +
+        `• Total Target: *${formatCurrency(finalTarget)}*\n` +
+        `• Total Terkumpul: *${formatCurrency(newAmt)}* / ${formatCurrency(finalTarget)} (${Math.round((newAmt / finalTarget) * 100)}%)\n\n` +
         `💡 *Catatan*: Uang tetap berada di *${walletSourceDisplayName}* & *TIDAK dihitung sebagai Pengeluaran (Expense)*.`,
         { parse_mode: "Markdown" }
       );
