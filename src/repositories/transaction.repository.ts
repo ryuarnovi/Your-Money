@@ -263,6 +263,91 @@ export async function convertLegacyTransferToRealTransfer(
   return id;
 }
 
+export async function checkPotentialDuplicate(
+  userId: string,
+  data: {
+    amount: number;
+    type: string;
+    date: Date;
+    categoryId?: string;
+    description?: string;
+  }
+) {
+  const dateTs = Math.floor(data.date.getTime() / 1000);
+  const startOfDay = Math.floor(new Date(data.date).setHours(0, 0, 0, 0) / 1000);
+  const endOfDay = Math.floor(new Date(data.date).setHours(23, 59, 59, 999) / 1000);
+
+  const rows = await queryAll<TransactionRow>(
+    `SELECT t.*, c.name as category_name
+     FROM transactions t
+     LEFT JOIN categories c ON t.category_id = c.id
+     WHERE t.user_id = ? AND t.amount = ? AND t.type = ? AND t.date >= ? AND t.date <= ?`,
+    [userId, data.amount, data.type, startOfDay, endOfDay]
+  );
+
+  if (rows.length > 0) {
+    return {
+      isDuplicate: true,
+      existing: mapTransactionRow(rows[0]),
+      count: rows.length,
+    };
+  }
+
+  return { isDuplicate: false };
+}
+
+export async function detectDuplicateTransactions(userId: string) {
+  const rows = await queryAll<TransactionRow>(
+    `SELECT t.*, c.name as category_name
+     FROM transactions t
+     LEFT JOIN categories c ON t.category_id = c.id
+     WHERE t.user_id = ?
+     ORDER BY t.date DESC`,
+    [userId]
+  );
+
+  const mapped = rows.map(mapTransactionRow);
+  const groupMap = new Map<string, typeof mapped>();
+
+  for (const tx of mapped) {
+    const dateStr = new Date(tx.date).toISOString().split("T")[0];
+    const key = `${dateStr}_${tx.type}_${tx.amount}`;
+
+    if (!groupMap.has(key)) {
+      groupMap.set(key, []);
+    }
+    groupMap.get(key)!.push(tx);
+  }
+
+  const duplicates: Array<{ key: string; transactions: typeof mapped; type: "exact" | "possible" }> = [];
+
+  for (const [key, txs] of groupMap.entries()) {
+    if (txs.length > 1) {
+      // Check if descriptions or categories match exactly
+      const descSet = new Set(txs.map((t) => (t.description || "").toLowerCase().trim()));
+      const isExact = descSet.size === 1;
+
+      duplicates.push({
+        key,
+        transactions: txs,
+        type: isExact ? "exact" : "possible",
+      });
+    }
+  }
+
+  return duplicates;
+}
+
+export async function mergeDuplicateTransactions(userId: string, masterId: string, duplicateIds: string[]) {
+  if (duplicateIds.length === 0) return;
+
+  const placeholders = duplicateIds.map(() => "?").join(", ");
+  await executeQuery(
+    `DELETE FROM transactions WHERE user_id = ? AND id IN (${placeholders})`,
+    [userId, ...duplicateIds]
+  );
+}
+
 export async function getCashflowData(userId: string, startDate: Date, endDate: Date) {
   const rows = await queryAll<{ date: string; type: string; total: number }>(
     `SELECT date(date, 'unixepoch') as date, type, SUM(amount) as total

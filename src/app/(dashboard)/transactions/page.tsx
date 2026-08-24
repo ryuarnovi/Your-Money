@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Search, Filter, Trash2, Edit2, ArrowUpRight, ArrowDownRight, FileSpreadsheet, Download, RefreshCw } from "lucide-react";
+import { Plus, Search, Filter, Trash2, Edit2, ArrowUpRight, ArrowDownRight, FileSpreadsheet, Download, RefreshCw, Layers, AlertTriangle } from "lucide-react";
 import { formatCurrency, formatDate } from "@/utils";
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from "@/types";
 import {
@@ -18,6 +18,8 @@ import {
   createTransactionAction,
   updateTransactionAction,
   deleteTransactionAction,
+  detectDuplicateTransactionsAction,
+  mergeDuplicateTransactionsAction,
 } from "@/actions/transaction.actions";
 import { getCategoriesAction } from "@/actions/crud.actions";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -43,6 +45,12 @@ interface Transaction {
   date: Date;
 }
 
+interface DuplicateGroup {
+  key: string;
+  transactions: Transaction[];
+  type: "exact" | "possible";
+}
+
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -51,6 +59,15 @@ export default function TransactionsPage() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
+
+  // Duplicate Modal states
+  const [openDuplicatesModal, setOpenDuplicatesModal] = useState(false);
+  const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([]);
+  const [scanningDuplicates, setScanningDuplicates] = useState(false);
+
+  // Duplicate Warning Modal states
+  const [openWarningModal, setOpenWarningModal] = useState(false);
+  const [existingDuplicate, setExistingDuplicate] = useState<Transaction | null>(null);
 
   // Form states for create/edit
   const [amount, setAmount] = useState("");
@@ -103,28 +120,62 @@ export default function TransactionsPage() {
     setDate(new Date(t.date).toISOString().split("T")[0]);
   }
 
-  async function handleCreate() {
-    if (!amount || !categoryId) {
+  async function handleCreate(force = false) {
+    if (!amount || (type !== "transfer" && !categoryId)) {
       toast.error("Nominal dan kategori wajib diisi");
       return;
     }
 
     try {
-      await createTransactionAction({
-        amount: Number(amount),
-        type,
-        categoryId,
-        paymentMethod,
-        description,
-        date: new Date(date),
-      });
+      const res = await createTransactionAction(
+        {
+          amount: Number(amount),
+          type,
+          categoryId: categoryId || undefined,
+          paymentMethod,
+          description,
+          date: new Date(date),
+        },
+        { force }
+      );
+
+      if ((res as any).isDuplicate) {
+        setExistingDuplicate((res as any).existing);
+        setOpenWarningModal(true);
+        return;
+      }
 
       toast.success("Transaksi berhasil ditambahkan!");
       setOpenCreate(false);
+      setOpenWarningModal(false);
       resetForm();
       loadData();
     } catch {
       toast.error("Gagal menambah transaksi");
+    }
+  }
+
+  async function handleScanDuplicates() {
+    setScanningDuplicates(true);
+    try {
+      const res = await detectDuplicateTransactionsAction();
+      setDuplicateGroups(res as any);
+      setOpenDuplicatesModal(true);
+    } catch {
+      toast.error("Gagal memindai duplikat");
+    } finally {
+      setScanningDuplicates(false);
+    }
+  }
+
+  async function handleMergeDuplicates(masterId: string, dupIds: string[]) {
+    try {
+      await mergeDuplicateTransactionsAction(masterId, dupIds);
+      toast.success("Transaksi duplikat berhasil digabungkan!");
+      handleScanDuplicates();
+      loadData();
+    } catch {
+      toast.error("Gagal menggabungkan duplikat");
     }
   }
 
@@ -194,6 +245,17 @@ export default function TransactionsPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleScanDuplicates}
+            disabled={scanningDuplicates}
+            className="gap-1.5 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+          >
+            <Layers className="h-4 w-4" />
+            {scanningDuplicates ? "Memindai..." : "Deteksi Duplikat"}
+          </Button>
+
           <Button variant="outline" size="sm" onClick={exportExcel} className="gap-1.5">
             <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
             Excel
@@ -287,7 +349,7 @@ export default function TransactionsPage() {
                 </div>
               </div>
               <DialogFooter>
-                <Button onClick={handleCreate}>Simpan Transaksi</Button>
+                <Button onClick={() => handleCreate()}>Simpan Transaksi</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -494,6 +556,117 @@ export default function TransactionsPage() {
           </TableBody>
         </Table>
       </Card>
+
+      {/* Pre-insert Warning Modal */}
+      <Dialog open={openWarningModal} onOpenChange={setOpenWarningModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-500">
+              <AlertTriangle className="h-5 w-5" /> Transaksi Serupa Sudah Ada
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-sm">
+            <p className="text-muted-foreground">
+              Sistem menemukan transaksi dengan nominal dan tanggal yang sama sudah tercatat sebelumnya:
+            </p>
+            {existingDuplicate && (
+              <div className="p-3 rounded-lg bg-muted/60 space-y-1 text-xs">
+                <p>• <strong>Tanggal:</strong> {formatDate(existingDuplicate.date)}</p>
+                <p>• <strong>Nominal:</strong> {formatCurrency(existingDuplicate.amount)}</p>
+                <p>• <strong>Tipe:</strong> {existingDuplicate.type}</p>
+                <p>• <strong>Keterangan:</strong> {existingDuplicate.description || "-"}</p>
+              </div>
+            )}
+            <p className="font-medium text-xs">Apakah Anda yakin ingin tetap menyimpan transaksi ini?</p>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setOpenWarningModal(false)}>
+              Batalkan
+            </Button>
+            <Button variant="default" onClick={() => handleCreate(true)}>
+              Tetap Simpan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Detect Duplicates Modal */}
+      <Dialog open={openDuplicatesModal} onOpenChange={setOpenDuplicatesModal}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Layers className="h-5 w-5 text-amber-500" /> Hasil Pemindaian Transaksi Duplikat
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {duplicateGroups.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <p className="text-sm font-medium">Tidak Ditemukan Transaksi Duplikat 🎉</p>
+                <p className="text-xs mt-1">Seluruh data transaksi Anda rapi dan bebas dari penggandaan.</p>
+              </div>
+            ) : (
+              duplicateGroups.map((group) => {
+                const master = group.transactions[0];
+                const dupIds = group.transactions.slice(1).map((t) => t.id);
+
+                return (
+                  <Card key={group.key} className="p-4 border-amber-500/20 bg-amber-500/5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Badge variant={group.type === "exact" ? "destructive" : "secondary"}>
+                          {group.type === "exact" ? "Duplikat Persis" : "Kemungkinan Duplikat"}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {formatDate(master.date)} • {formatCurrency(master.amount)}
+                        </span>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs gap-1 border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10"
+                        onClick={() => handleMergeDuplicates(master.id, dupIds)}
+                      >
+                        Merge ({group.transactions.length - 1} Duplikat)
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {group.transactions.map((tx, idx) => (
+                        <div
+                          key={tx.id}
+                          className={`p-2.5 rounded text-xs flex items-center justify-between ${
+                            idx === 0 ? "bg-background border font-medium" : "bg-card/70 border border-dashed"
+                          }`}
+                        >
+                          <div>
+                            <span className="text-[10px] text-muted-foreground uppercase mr-2 font-semibold">
+                              {idx === 0 ? "Master" : `Duplikat #${idx}`}
+                            </span>
+                            <span>{tx.description || tx.categoryName || "Tanpa Keterangan"}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="font-semibold">{formatCurrency(tx.amount)}</span>
+                            {idx > 0 && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6 text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDelete(tx.id)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                );
+              })
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

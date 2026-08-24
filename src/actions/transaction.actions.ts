@@ -44,9 +44,55 @@ export async function getTransactionByIdAction(id: string) {
   return transactionRepo.getTransactionById(id, userId);
 }
 
-export async function createTransactionAction(formData: unknown) {
+export async function checkPotentialDuplicateAction(data: {
+  amount: number;
+  type: string;
+  date: Date;
+  categoryId?: string;
+  description?: string;
+}) {
+  const userId = await getSessionUserId();
+  return transactionRepo.checkPotentialDuplicate(userId, data);
+}
+
+export async function detectDuplicateTransactionsAction() {
+  const userId = await getSessionUserId();
+  return transactionRepo.detectDuplicateTransactions(userId);
+}
+
+export async function mergeDuplicateTransactionsAction(masterId: string, duplicateIds: string[]) {
+  const userId = await getSessionUserId();
+  await transactionRepo.mergeDuplicateTransactions(userId, masterId, duplicateIds);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/transactions");
+  revalidatePath("/accounts");
+
+  return { success: true };
+}
+
+export async function createTransactionAction(formData: unknown, options: { force?: boolean } = {}) {
   const userId = await getSessionUserId();
   const validated = transactionSchema.parse(formData);
+
+  if (!options.force) {
+    const dupCheck = await transactionRepo.checkPotentialDuplicate(userId, {
+      amount: validated.amount,
+      type: validated.type,
+      date: validated.date,
+      categoryId: validated.categoryId,
+      description: validated.description,
+    });
+
+    if (dupCheck.isDuplicate) {
+      return {
+        success: false,
+        isDuplicate: true,
+        existing: dupCheck.existing,
+        message: "Transaksi serupa sudah ada. Apakah Anda yakin ingin menyimpan transaksi ini?",
+      };
+    }
+  }
 
   const id = await transactionRepo.createTransaction({
     userId,
