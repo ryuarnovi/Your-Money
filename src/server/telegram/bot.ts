@@ -425,18 +425,49 @@ bot.on("message:text", async (ctx) => {
     );
   }
 
-  // Check 2: Allocation / Tabungan command (e.g., 'alokasi 1.450.000 Dana Kuliah' or 'tabungan 1.450.000 pay kampus' or 'simpan 1.450.000 HP')
-  const allocMatch = text.match(/^(alokasi|tabungan|simpan|goal)\s+([0-9.,\s]+)\s+(.*)$/i);
-  if (allocMatch) {
-    const rawAmt = Number(allocMatch[2].replace(/[^0-9]/g, ""));
-    const goalSearch = allocMatch[3].trim().toLowerCase();
+  // Check 2: Allocation / Tabungan command (e.g., 'alokasi 1.450.000 Dana Kuliah' OR 'alokasi Bank Jateng 1.450.000 tabungan Kuliah' OR 'alokasi campus 1.450.000 tabungan kuliah')
+  const isAllocCmd = text.match(/^(alokasi|tabungan|simpan|goal)\b/i);
+  if (isAllocCmd) {
+    // Extract the amount string
+    const amtMatch = text.match(/([0-9]{1,3}(?:\.[0-9]{3})+|[0-9]{4,})/);
+    if (!amtMatch) {
+      return ctx.reply("⚠️ Format nominal alokasi tidak valid. Contoh:\n`alokasi Bank Jateng 1.450.000 tabungan Kuliah`", { parse_mode: "Markdown" });
+    }
+
+    const rawAmtStr = amtMatch[0];
+    const rawAmt = Number(rawAmtStr.replace(/[^0-9]/g, ""));
+    const amtIndex = text.indexOf(rawAmtStr);
+
+    const beforeAmt = text.substring(isAllocCmd[0].length, amtIndex).trim(); // Wallet source if specified (e.g. 'Bank Jateng', 'campus')
+    const afterAmt = text.substring(amtIndex + rawAmtStr.length).trim(); // Goal search string (e.g. 'tabungan Kuliah' or 'Dana Kuliah')
+
+    // Clean goal name: strip leading 'tabungan', 'ke', 'untuk', 'goal'
+    let goalSearch = afterAmt.replace(/^(tabungan|ke|untuk|goal)\s+/i, "").trim().toLowerCase();
+    if (!goalSearch) {
+      goalSearch = afterAmt.trim().toLowerCase();
+    }
 
     if (!rawAmt || isNaN(rawAmt)) {
       return ctx.reply("⚠️ Nominal alokasi tidak valid.");
     }
 
     const { queryAll, executeQuery } = await import("@/db/client");
+    const { getWallets } = await import("@/repositories/wallet.repository");
     const { generateId } = await import("@/utils");
+
+    const userWallets = await getWallets(userId).catch(() => []);
+    let walletSourceDisplayName = "Rekening Utama";
+    if (beforeAmt) {
+      const matchedWallet = userWallets.find(
+        (w) => w.name.toLowerCase().includes(beforeAmt.toLowerCase()) || beforeAmt.toLowerCase().includes(w.name.toLowerCase())
+      );
+      if (matchedWallet) {
+        walletSourceDisplayName = matchedWallet.name;
+      } else {
+        walletSourceDisplayName = beforeAmt;
+      }
+    }
+
     const goals = await queryAll<{ id: string; name: string; current_amount: number; target_amount: number }>(
       "SELECT id, name, current_amount, target_amount FROM saving_goals WHERE user_id = ?",
       [userId]
@@ -465,9 +496,10 @@ bot.on("message:text", async (ctx) => {
       return ctx.reply(
         `✨ *Target Tabungan Baru Dibuat Otomatis*!\n\n` +
         `• Target Goal: *${cleanName}*\n` +
+        `• Akun Asal: *${walletSourceDisplayName}*\n` +
         `• Dialokasikan Pertama: *${formatCurrency(rawAmt)}*\n` +
         `• Total Terkumpul: *${formatCurrency(rawAmt)}*\n\n` +
-        `💡 *Catatan*: Goal ini baru saja dibuat secara otomatis dan uangnya *TIDAK dihitung sebagai Pengeluaran*.`,
+        `💡 *Catatan*: Uang ini berada di *${walletSourceDisplayName}* & *TIDAK dihitung sebagai Pengeluaran*.`,
         { parse_mode: "Markdown" }
       );
     }
@@ -482,9 +514,10 @@ bot.on("message:text", async (ctx) => {
       return ctx.reply(
         `🔒 *Alokasi Tabungan Berhasil*!\n\n` +
         `• Target Goal: *${matchedGoal.name}*\n` +
+        `• Akun Asal: *${walletSourceDisplayName}*\n` +
         `• Nominal Dialokasikan: *${formatCurrency(rawAmt)}*\n` +
         `• Total Terkumpul: *${formatCurrency(newAmt)}* / ${formatCurrency(matchedGoal.target_amount)}\n\n` +
-        `💡 *Catatan*: Alokasi uang ini berada di rekening milikmu dan *TIDAK dihitung sebagai Pengeluaran (Expense)*.`,
+        `💡 *Catatan*: Uang tetap berada di *${walletSourceDisplayName}* & *TIDAK dihitung sebagai Pengeluaran (Expense)*.`,
         { parse_mode: "Markdown" }
       );
     }
