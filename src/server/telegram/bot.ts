@@ -375,7 +375,57 @@ bot.on("message:text", async (ctx) => {
   const userId = await getUserIdByChatId(chatId);
   if (!userId) return ctx.reply("⚠️ Akun Telegram belum terhubung dengan DuitKu.");
 
-  // Check 1: Allocation / Tabungan command (e.g., 'alokasi 1.450.000 Dana Kuliah' or 'tabungan 1.450.000 pay kampus' or 'simpan 1.450.000 HP')
+  // Check 1: Spend/Pay from Saving Goal command (e.g., 'pakai tabungan 1.450.000 Dana Kuliah' or 'bayar tabungan 1.450.000 Dana Kuliah')
+  const spendGoalMatch = text.match(/^(pakai tabungan|bayar tabungan|cairkan tabungan|pakai goal)\s+([0-9.,\s]+)\s+(.*)$/i);
+  if (spendGoalMatch) {
+    const rawAmt = Number(spendGoalMatch[2].replace(/[^0-9]/g, ""));
+    const goalSearch = spendGoalMatch[3].trim().toLowerCase();
+
+    if (!rawAmt || isNaN(rawAmt)) {
+      return ctx.reply("⚠️ Nominal pembayaran tidak valid.");
+    }
+
+    const { queryAll, executeQuery } = await import("@/db/client");
+    const { generateId } = await import("@/utils");
+    const goals = await queryAll<{ id: string; name: string; current_amount: number; target_amount: number }>(
+      "SELECT id, name, current_amount, target_amount FROM saving_goals WHERE user_id = ?",
+      [userId]
+    );
+
+    const matchedGoal = goals.find((g) => g.name.toLowerCase().includes(goalSearch) || goalSearch.includes(g.name.toLowerCase()));
+    if (!matchedGoal) {
+      return ctx.reply(`⚠️ Target tabungan "${goalSearch}" tidak ditemukan.`);
+    }
+
+    const newGoalAmt = Math.max(0, (matchedGoal.current_amount || 0) - rawAmt);
+    await executeQuery(
+      "UPDATE saving_goals SET current_amount = ? WHERE id = ? AND user_id = ?",
+      [newGoalAmt, matchedGoal.id, userId]
+    );
+
+    // Create real EXPENSE transaction for this spending from savings!
+    const cat = await findCategoryByName("Kuliah", "expense") || await findCategoryByName("Pendidikan", "expense");
+    await createTransaction({
+      userId,
+      amount: rawAmt,
+      type: "expense",
+      categoryId: cat?.id,
+      paymentMethod: "bank",
+      description: `Pembayaran dari Tabungan (${matchedGoal.name})`,
+      date: new Date(),
+    });
+
+    return ctx.reply(
+      `💸 *Pembayaran dari Tabungan Berhasil*!\n\n` +
+      `• Target Goal: *${matchedGoal.name}*\n` +
+      `• Nominal Dibayarkan: *${formatCurrency(rawAmt)}*\n` +
+      `• Sisa Tabungan Goal: *${formatCurrency(newGoalAmt)}*\n` +
+      `• Status: *Tercatat sebagai Pengeluaran Real (Expense) & Mengurangi Saldo Rekening*`,
+      { parse_mode: "Markdown" }
+    );
+  }
+
+  // Check 2: Allocation / Tabungan command (e.g., 'alokasi 1.450.000 Dana Kuliah' or 'tabungan 1.450.000 pay kampus' or 'simpan 1.450.000 HP')
   const allocMatch = text.match(/^(alokasi|tabungan|simpan|goal)\s+([0-9.,\s]+)\s+(.*)$/i);
   if (allocMatch) {
     const rawAmt = Number(allocMatch[2].replace(/[^0-9]/g, ""));
@@ -386,6 +436,7 @@ bot.on("message:text", async (ctx) => {
     }
 
     const { queryAll, executeQuery } = await import("@/db/client");
+    const { generateId } = await import("@/utils");
     const goals = await queryAll<{ id: string; name: string; current_amount: number; target_amount: number }>(
       "SELECT id, name, current_amount, target_amount FROM saving_goals WHERE user_id = ?",
       [userId]
@@ -395,8 +446,30 @@ bot.on("message:text", async (ctx) => {
     if (!matchedGoal && (goalSearch.includes("kampus") || goalSearch.includes("kuliah") || goalSearch.includes("pay"))) {
       matchedGoal = goals.find((g) => g.name.toLowerCase().includes("kuliah"));
     }
-    if (!matchedGoal && goals.length > 0) {
-      matchedGoal = goals[0];
+
+    // Auto-create saving goal if not found!
+    if (!matchedGoal) {
+      const cleanName = goalSearch
+        .split(" ")
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ");
+
+      const newGoalId = generateId();
+      const now = Math.floor(Date.now() / 1000);
+      await executeQuery(
+        `INSERT INTO saving_goals (id, user_id, name, target_amount, current_amount, icon, color, is_completed, created_at)
+         VALUES (?, ?, ?, ?, ?, 'PiggyBank', '#3b82f6', 0, ?)`,
+        [newGoalId, userId, cleanName, rawAmt, rawAmt, now]
+      );
+
+      return ctx.reply(
+        `✨ *Target Tabungan Baru Dibuat Otomatis*!\n\n` +
+        `• Target Goal: *${cleanName}*\n` +
+        `• Dialokasikan Pertama: *${formatCurrency(rawAmt)}*\n` +
+        `• Total Terkumpul: *${formatCurrency(rawAmt)}*\n\n` +
+        `💡 *Catatan*: Goal ini baru saja dibuat secara otomatis dan uangnya *TIDAK dihitung sebagai Pengeluaran*.`,
+        { parse_mode: "Markdown" }
+      );
     }
 
     if (matchedGoal) {
