@@ -395,36 +395,62 @@ bot.on("message:text", async (ctx) => {
   const fullDesc = match[3].trim();
   const type = sign === "+" ? "income" : "expense";
 
-  // Check if ending with payment method (e.g. 'Makan bank', 'Transport gopay', 'Kopi cash')
-  const knownMethods: Record<string, string> = {
-    cash: "cash",
-    tunai: "cash",
-    bank: "bank",
-    bca: "bank",
-    mandiri: "bank",
-    bri: "bank",
-    bni: "bank",
-    transfer: "transfer",
-    qris: "qris",
-    gopay: "gopay",
-    ovo: "ovo",
-    dana: "dana",
-    shopeepay: "shopeepay",
-  };
+  // Fetch user wallets to match wallet names dynamically (e.g. 'Bank Jateng', 'GoPay', 'Cash')
+  const { getWallets } = await import("@/repositories/wallet.repository");
+  const userWallets = await getWallets(userId).catch(() => []);
 
   let detectedMethod = "cash";
+  let methodDisplayName = "CASH";
   let cleanDesc = fullDesc;
 
-  const parts = fullDesc.split(/\s+/);
-  if (parts.length > 1) {
-    const lastWord = parts[parts.length - 1].toLowerCase();
-    if (knownMethods[lastWord]) {
-      detectedMethod = knownMethods[lastWord];
-      cleanDesc = parts.slice(0, -1).join(" ");
+  // Pass 1: Try matching user's wallet name in fullDesc (e.g., 'Bank Jateng', 'GoPay')
+  let walletMatched = false;
+  for (const w of userWallets) {
+    const wNameLower = w.name.toLowerCase();
+    const fullDescLower = fullDesc.toLowerCase();
+    if (fullDescLower.includes(wNameLower)) {
+      detectedMethod = w.type;
+      methodDisplayName = `${w.type.toUpperCase()} (${w.name})`;
+      const regex = new RegExp(w.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+      cleanDesc = fullDesc.replace(regex, "").trim();
+      walletMatched = true;
+      break;
     }
   }
 
-  // Clean category search string (e.g. 'transport(pengeluaran)' -> 'transport')
+  // Pass 2: If no direct wallet name match, check known keyword mapping
+  if (!walletMatched) {
+    const keywordMap: { keywords: string[]; method: string; display: string }[] = [
+      { keywords: ["bank jateng", "bank bca", "bank mandiri", "bank bri", "bank bni", "bank cimb", "bank danamon", "bank permata", "bank mega", "bank syariah", "bank jatim", "bank jabar", "bank dki", "seabank", "blu bca", "jenius"], method: "bank", display: "BANK" },
+      { keywords: ["e-money", "emoney", "e wallet", "ewallet", "uang elektronik"], method: "emoney", display: "E-MONEY" },
+      { keywords: ["kas tunai", "uang tunai", "physical cash"], method: "cash", display: "CASH" },
+      { keywords: ["bank", "transfer", "bca", "mandiri", "bri", "bni", "cimb", "danamon", "permata", "mega", "bsi", "blu", "jenius", "neo"], method: "bank", display: "BANK" },
+      { keywords: ["gopay", "ovo", "dana", "shopeepay", "qris", "linkaja"], method: "emoney", display: "E-MONEY" },
+      { keywords: ["cash", "tunai", "saku"], method: "cash", display: "CASH" },
+    ];
+
+    const fullDescLower = fullDesc.toLowerCase();
+    for (const item of keywordMap) {
+      for (const kw of item.keywords) {
+        if (fullDescLower.includes(kw)) {
+          detectedMethod = item.method;
+          methodDisplayName = item.display;
+          const regex = new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+          cleanDesc = fullDesc.replace(regex, "").trim();
+          walletMatched = true;
+          break;
+        }
+      }
+      if (walletMatched) break;
+    }
+  }
+
+  // Fallback cleanDesc if empty
+  if (!cleanDesc) {
+    cleanDesc = fullDesc;
+  }
+
+  // Clean category search string (e.g. 'gaji' or 'makan')
   const cleanCategorySearch = cleanDesc.replace(/\(.*?\)/g, "").trim() || cleanDesc;
 
   // Find category
@@ -446,7 +472,7 @@ bot.on("message:text", async (ctx) => {
       `✅ *Transaksi Berhasil Dicatat*!\n\n` +
       `• Jenis: ${type === "income" ? "Pemasukan 🟢" : "Pengeluaran 🔴"}\n` +
       `• Nominal: *${formatCurrency(amount)}*\n` +
-      `• Akun / Metode: *${detectedMethod.toUpperCase()}*\n` +
+      `• Akun / Metode: *${methodDisplayName}*\n` +
       `• Kategori: *${cat?.name || cleanCategorySearch}*\n` +
       `• Keterangan: _${cleanDesc}_`,
       { parse_mode: "Markdown" }

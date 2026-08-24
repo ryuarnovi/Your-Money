@@ -32,12 +32,50 @@ export async function GET(req: NextRequest) {
 
       if (txs.length === 0) continue;
 
-      const dataToExport = txs.map((t) => ({
-        Tanggal: formatDate(new Date(t.date * 1000)),
-        Jenis: t.type === "income" ? "Pemasukan" : "Pengeluaran",
-        Nominal: t.amount,
-        Keterangan: t.description || "-",
-      }));
+      let totalIncome = 0;
+      let totalExpense = 0;
+
+      const dataToExport = txs.map((t) => {
+        if (t.type === "income") totalIncome += t.amount;
+        if (t.type === "expense") totalExpense += t.amount;
+
+        return {
+          Tanggal: formatDate(new Date(t.date * 1000)),
+          Jenis: t.type === "income" ? "Pemasukan" : "Pengeluaran",
+          Nominal: t.amount,
+          Keterangan: t.description || "-",
+        };
+      });
+
+      // Add empty separator row
+      dataToExport.push({
+        Tanggal: "",
+        Jenis: "",
+        Nominal: "",
+        Keterangan: "",
+      } as any);
+
+      // Add Summary Total Rows
+      dataToExport.push({
+        Tanggal: "TOTAL PEMASUKAN",
+        Jenis: "Pemasukan",
+        Nominal: totalIncome,
+        Keterangan: "Total Pemasukan Bulan Ini",
+      } as any);
+
+      dataToExport.push({
+        Tanggal: "TOTAL PENGELUARAN",
+        Jenis: "Pengeluaran",
+        Nominal: totalExpense,
+        Keterangan: "Total Pengeluaran Bulan Ini",
+      } as any);
+
+      dataToExport.push({
+        Tanggal: "NET CASHFLOW (SALDO BERSIH)",
+        Jenis: totalIncome - totalExpense >= 0 ? "Surplus" : "Defisit",
+        Nominal: totalIncome - totalExpense,
+        Keterangan: "Selisih Pemasukan - Pengeluaran",
+      } as any);
 
       const worksheet = XLSX.utils.json_to_sheet(dataToExport);
       const workbook = XLSX.utils.book_new();

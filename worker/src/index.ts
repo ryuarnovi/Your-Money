@@ -169,33 +169,45 @@ export default {
           }),
         });
 
-        // For monthly report, also generate and send CSV file document automatically
-        if (!isWeekly) {
-          const csvLines = ["Tanggal,Jenis,Nominal,Keterangan"];
-          for (const t of txs) {
-            const dateStr = new Date(t.date * 1000).toISOString().split("T")[0];
-            const typeStr = t.type === "income" ? "Pemasukan" : "Pengeluaran";
-            const desc = `"${(t.description || "-").replace(/"/g, '""')}"`;
-            csvLines.push(`${dateStr},${typeStr},${t.amount},${desc}`);
-          }
-          const csvContent = csvLines.join("\n");
-          const dateToday = new Date().toISOString().split("T")[0];
+        // Generate and send CSV file document automatically with summary totals
+        const csvLines = ["Tanggal,Jenis,Nominal,Keterangan"];
+        let periodIncome = 0;
+        let periodExpense = 0;
 
-          const formData = new FormData();
-          formData.append("chat_id", u.telegram_chat_id);
-          formData.append("caption", "📎 *File CSV Laporan Bulanan DuitKu*");
-          formData.append("parse_mode", "Markdown");
-          formData.append(
-            "document",
-            new Blob([csvContent], { type: "text/csv" }),
-            `Laporan_Bulanan_DuitKu_${dateToday}.csv`
-          );
+        for (const t of txs) {
+          if (t.type === "income") periodIncome += t.amount;
+          if (t.type === "expense") periodExpense += t.amount;
 
-          await fetch(`https://api.telegram.org/bot${botToken}/sendDocument`, {
-            method: "POST",
-            body: formData,
-          });
+          const dateStr = new Date(t.date * 1000).toISOString().split("T")[0];
+          const typeStr = t.type === "income" ? "Pemasukan" : "Pengeluaran";
+          const desc = `"${(t.description || "-").replace(/"/g, '""')}"`;
+          csvLines.push(`${dateStr},${typeStr},${t.amount},${desc}`);
         }
+
+        // Append empty line and totals summary
+        csvLines.push("");
+        csvLines.push(`TOTAL PEMASUKAN,Pemasukan,${periodIncome},"Total Pemasukan Periode Ini"`);
+        csvLines.push(`TOTAL PENGELUARAN,Pengeluaran,${periodExpense},"Total Pengeluaran Periode Ini"`);
+        csvLines.push(`NET CASHFLOW,${periodIncome - periodExpense >= 0 ? "Surplus" : "Defisit"},${periodIncome - periodExpense},"Selisih Pemasukan - Pengeluaran"`);
+
+        const csvContent = csvLines.join("\n");
+        const dateToday = new Date().toISOString().split("T")[0];
+        const reportTitle = isWeekly ? "Mingguan" : "Bulanan";
+
+        const formData = new FormData();
+        formData.append("chat_id", u.telegram_chat_id);
+        formData.append("caption", `📎 *File CSV Laporan ${reportTitle} DuitKu*`);
+        formData.append("parse_mode", "Markdown");
+        formData.append(
+          "document",
+          new Blob([csvContent], { type: "text/csv" }),
+          `Laporan_${reportTitle}_DuitKu_${dateToday}.csv`
+        );
+
+        await fetch(`https://api.telegram.org/bot${botToken}/sendDocument`, {
+          method: "POST",
+          body: formData,
+        });
       }
     } catch (err) {
       console.error("Cloudflare Cron error:", err);
