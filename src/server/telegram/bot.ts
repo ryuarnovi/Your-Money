@@ -366,7 +366,7 @@ bot.command(["dompet", "rekening"], async (ctx) => {
   await ctx.reply(text, { parse_mode: "Markdown" });
 });
 
-// Message listener for natural language input (+500000 Gaji, -25000 Makan bank)
+// Message listener for natural language input (+500000 Gaji, -25000 Makan bank, alokasi 1450000 Dana Kuliah)
 bot.on("message:text", async (ctx) => {
   const text = ctx.message.text.trim();
   if (text.startsWith("/")) return; // Ignore unhandled commands
@@ -374,6 +374,48 @@ bot.on("message:text", async (ctx) => {
   const chatId = String(ctx.chat.id);
   const userId = await getUserIdByChatId(chatId);
   if (!userId) return ctx.reply("⚠️ Akun Telegram belum terhubung dengan DuitKu.");
+
+  // Check 1: Allocation / Tabungan command (e.g., 'alokasi 1.450.000 Dana Kuliah' or 'tabungan 1.450.000 pay kampus' or 'simpan 1.450.000 HP')
+  const allocMatch = text.match(/^(alokasi|tabungan|simpan|goal)\s+([0-9.,\s]+)\s+(.*)$/i);
+  if (allocMatch) {
+    const rawAmt = Number(allocMatch[2].replace(/[^0-9]/g, ""));
+    const goalSearch = allocMatch[3].trim().toLowerCase();
+
+    if (!rawAmt || isNaN(rawAmt)) {
+      return ctx.reply("⚠️ Nominal alokasi tidak valid.");
+    }
+
+    const { queryAll, executeQuery } = await import("@/db/client");
+    const goals = await queryAll<{ id: string; name: string; current_amount: number; target_amount: number }>(
+      "SELECT id, name, current_amount, target_amount FROM saving_goals WHERE user_id = ?",
+      [userId]
+    );
+
+    let matchedGoal = goals.find((g) => g.name.toLowerCase().includes(goalSearch) || goalSearch.includes(g.name.toLowerCase()));
+    if (!matchedGoal && (goalSearch.includes("kampus") || goalSearch.includes("kuliah") || goalSearch.includes("pay"))) {
+      matchedGoal = goals.find((g) => g.name.toLowerCase().includes("kuliah"));
+    }
+    if (!matchedGoal && goals.length > 0) {
+      matchedGoal = goals[0];
+    }
+
+    if (matchedGoal) {
+      const newAmt = (matchedGoal.current_amount || 0) + rawAmt;
+      await executeQuery(
+        "UPDATE saving_goals SET current_amount = ? WHERE id = ? AND user_id = ?",
+        [newAmt, matchedGoal.id, userId]
+      );
+
+      return ctx.reply(
+        `🔒 *Alokasi Tabungan Berhasil*!\n\n` +
+        `• Target Goal: *${matchedGoal.name}*\n` +
+        `• Nominal Dialokasikan: *${formatCurrency(rawAmt)}*\n` +
+        `• Total Terkumpul: *${formatCurrency(newAmt)}* / ${formatCurrency(matchedGoal.target_amount)}\n\n` +
+        `💡 *Catatan*: Alokasi uang ini berada di rekening milikmu dan *TIDAK dihitung sebagai Pengeluaran (Expense)*.`,
+        { parse_mode: "Markdown" }
+      );
+    }
+  }
 
   // Regex pattern for +amount category or -amount category (supports dots/commas e.g. -40.000 transport)
   const match = text.match(/^([+-])([0-9.,\s]+?)\s+(.*)$/);
