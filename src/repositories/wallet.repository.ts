@@ -74,12 +74,16 @@ export async function getWallets(userId: string): Promise<WalletData[]> {
     return getWallets(userId);
   }
 
-  // Get transaction totals per payment_method
-  const txSums = await queryAll<{ payment_method: string; type: string; total: number }>(
-    `SELECT payment_method, type, COALESCE(SUM(amount), 0) as total
+  // Get all user transactions to map precisely to individual wallets
+  const allTxs = await queryAll<{
+    payment_method: string;
+    type: string;
+    amount: number;
+    description: string | null;
+  }>(
+    `SELECT payment_method, type, amount, description
      FROM transactions
-     WHERE user_id = ?
-     GROUP BY payment_method, type`,
+     WHERE user_id = ?`,
     [userId]
   );
 
@@ -103,36 +107,79 @@ export async function getWallets(userId: string): Promise<WalletData[]> {
   const transferOutMap = new Map(transferOuts.map((t) => [t.from_wallet_id, t.total]));
   const transferInMap = new Map(transferIns.map((t) => [t.to_wallet_id, t.total]));
 
-  // Calculate wallet current balance
-  // Group wallets by type to distribute generic payment_method transactions if needed
-  const walletsByType: Record<string, RawWallet[]> = { cash: [], bank: [], emoney: [] };
-  rows.forEach((w) => {
-    if (!walletsByType[w.type]) walletsByType[w.type] = [];
-    walletsByType[w.type].push(w);
-  });
+  // Income and Expense accumulators per wallet ID
+  const incomeMap = new Map<string, number>();
+  const expenseMap = new Map<string, number>();
+
+  // Map each transaction to exactly ONE matching wallet
+  const sortedWallets = [...rows].sort((a, b) => b.name.length - a.name.length);
+
+  for (const tx of allTxs) {
+    const pm = (tx.payment_method || "").toLowerCase();
+    const desc = (tx.description || "").toLowerCase();
+    const combinedStr = `${pm} ${desc}`;
+
+    let matchedWalletId: string | null = null;
+
+    // Pass 1: Match by specific wallet name / keywords in description or payment_method
+    for (const w of sortedWallets) {
+      const wName = w.name.toLowerCase();
+      // Check full wallet name match (e.g. "bank jateng", "bank mandiri", "gopay")
+      if (wName.length > 3 && combinedStr.includes(wName)) {
+        matchedWalletId = w.id;
+        break;
+      }
+      // Check specific distinguishing words (e.g. "jateng" -> Bank Jateng, "mandiri" -> Bank Mandiri)
+      const words = wName
+        .split(/\s+/)
+        .filter((word) => !["bank", "kas", "tunai", "(cash)", "e-money", "emoney", "wallet", "uang"].includes(word));
+
+      for (const word of words) {
+        if (word.length >= 3 && combinedStr.includes(word)) {
+          matchedWalletId = w.id;
+          break;
+        }
+      }
+      if (matchedWalletId) break;
+    }
+
+    // Pass 2: Fallback to generic payment method matching (assign to first/default wallet of that type)
+    if (!matchedWalletId) {
+      const typeForMethod: Record<string, string> = {
+        cash: "cash",
+        tunai: "cash",
+        bank: "bank",
+        transfer: "bank",
+        qris: "emoney",
+        dana: "emoney",
+        ovo: "emoney",
+        gopay: "emoney",
+        shopeepay: "emoney",
+      };
+
+      const targetType = typeForMethod[pm] || "cash";
+      const matchingTypeWallets = rows.filter((w) => w.type === targetType);
+
+      if (matchingTypeWallets.length > 0) {
+        const defaultWallet = matchingTypeWallets.find((w) => Boolean(w.is_default));
+        matchedWalletId = defaultWallet ? defaultWallet.id : matchingTypeWallets[0].id;
+      } else {
+        matchedWalletId = rows[0].id;
+      }
+    }
+
+    if (matchedWalletId) {
+      if (tx.type === "income") {
+        incomeMap.set(matchedWalletId, (incomeMap.get(matchedWalletId) || 0) + Number(tx.amount || 0));
+      } else if (tx.type === "expense") {
+        expenseMap.set(matchedWalletId, (expenseMap.get(matchedWalletId) || 0) + Number(tx.amount || 0));
+      }
+    }
+  }
 
   return rows.map((w) => {
-    let income = 0;
-    let expense = 0;
-
-    const matchedMethods = TYPE_PAYMENT_METHODS[w.type] || [];
-    const sameTypeWallets = walletsByType[w.type] || [];
-    const isFirstOfType = sameTypeWallets.length > 0 && sameTypeWallets[0].id === w.id;
-
-    txSums.forEach((tx) => {
-      const pm = (tx.payment_method || "").toLowerCase();
-      const wName = w.name.toLowerCase();
-
-      // Check direct name match (e.g. "gopay" or "bca")
-      const matchesName = pm.includes(wName) || wName.includes(pm);
-      const matchesType = matchedMethods.includes(pm);
-
-      if (matchesName || (matchesType && isFirstOfType)) {
-        if (tx.type === "income") income += tx.total;
-        if (tx.type === "expense") expense += tx.total;
-      }
-    });
-
+    const income = incomeMap.get(w.id) || 0;
+    const expense = expenseMap.get(w.id) || 0;
     const outAmt = transferOutMap.get(w.id) || 0;
     const inAmt = transferInMap.get(w.id) || 0;
 
