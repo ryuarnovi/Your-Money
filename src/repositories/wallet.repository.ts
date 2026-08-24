@@ -316,6 +316,11 @@ export async function updateWallet(
 }
 
 export async function deleteWallet(id: string, userId: string) {
+  // Safely remove any transfer history referencing this wallet to prevent Foreign Key constraints
+  await executeQuery(
+    "DELETE FROM wallet_transfers WHERE (from_wallet_id = ? OR to_wallet_id = ?) AND user_id = ?",
+    [id, id, userId]
+  );
   await executeQuery("DELETE FROM wallets WHERE id = ? AND user_id = ?", [id, userId]);
 }
 

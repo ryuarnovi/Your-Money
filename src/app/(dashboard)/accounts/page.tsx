@@ -181,8 +181,8 @@ export default function AccountsPage() {
       toast.success(`Akun "${editName}" berhasil diperbarui!`);
       setOpenEdit(false);
       loadData();
-    } catch {
-      toast.error("Gagal memperbarui akun");
+    } catch (err: any) {
+      toast.error(err?.message || "Gagal memperbarui akun");
     }
   }
 
@@ -190,10 +190,10 @@ export default function AccountsPage() {
     if (!confirm(`Hapus akun "${name}"?`)) return;
     try {
       await deleteWalletAction(id);
-      toast.success("Akun dihapus");
+      toast.success(`Akun "${name}" berhasil dihapus`);
       loadData();
-    } catch {
-      toast.error("Gagal menghapus akun");
+    } catch (err: any) {
+      toast.error(err?.message || "Gagal menghapus akun");
     }
   }
 

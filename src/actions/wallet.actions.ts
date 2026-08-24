@@ -15,7 +15,7 @@ const walletSchema = z.object({
   name: z.string().min(1, "Nama akun wajib diisi"),
   type: z.enum(["cash", "bank", "emoney"]),
   accountNumber: z.string().optional(),
-  initialBalance: z.number().min(0, "Saldo awal tidak boleh negatif"),
+  initialBalance: z.number(),
   color: z.string().optional(),
   icon: z.string().optional(),
   isDefault: z.boolean().optional(),
