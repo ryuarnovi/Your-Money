@@ -9,11 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Target, Trash2, AlertCircle } from "lucide-react";
-import { formatCurrency, formatCompactCurrency } from "@/utils";
+import { Plus, Target, Trash2, AlertCircle, Pencil } from "lucide-react";
+import { formatCurrency, formatCompactCurrency, formatNumberWithDots, parseCurrencyInput } from "@/utils";
 import {
   getBudgetsAction,
   createBudgetAction,
+  updateBudgetAction,
   deleteBudgetAction,
   getCategoriesAction,
 } from "@/actions/crud.actions";
@@ -28,6 +29,7 @@ interface Category {
 interface Budget {
   id: string;
   name: string;
+  categoryId?: string;
   amount: number;
   spent: number;
   period: string;
@@ -42,12 +44,20 @@ export default function BudgetPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [openCreate, setOpenCreate] = useState(false);
+  const [openEdit, setOpenEdit] = useState(false);
 
-  // Form
+  // Create Form
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [period, setPeriod] = useState("monthly");
+
+  // Edit Form
+  const [editingId, setEditingId] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editAmount, setEditAmount] = useState("");
+  const [editCategoryId, setEditCategoryId] = useState("");
+  const [editPeriod, setEditPeriod] = useState("monthly");
 
   async function loadData() {
     setLoading(true);
@@ -69,17 +79,12 @@ export default function BudgetPage() {
     loadData();
   }, []);
 
-  async function handleCreate() {
-    if (!name || !amount) {
-      toast.error("Nama dan nominal budget wajib diisi");
-      return;
-    }
-
+  function calculateDates(periodType: string) {
     const now = new Date();
     let startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
     let endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-    if (period === "weekly") {
+    if (periodType === "weekly") {
       const day = now.getDay();
       const diffToMon = now.getDate() - day + (day === 0 ? -6 : 1);
       startDate = new Date(now.setDate(diffToMon));
@@ -87,17 +92,28 @@ export default function BudgetPage() {
       endDate = new Date(startDate);
       endDate.setDate(startDate.getDate() + 6);
       endDate.setHours(23, 59, 59, 999);
-    } else if (period === "yearly") {
+    } else if (periodType === "yearly") {
       startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0);
       endDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
     }
 
+    return { startDate, endDate };
+  }
+
+  async function handleCreate() {
+    const amt = parseCurrencyInput(amount);
+    if (!name.trim() || !amt) {
+      toast.error("Nama dan nominal budget wajib diisi");
+      return;
+    }
+
+    const { startDate, endDate } = calculateDates(period);
     const selectedCatId = categoryId === "all_categories" ? undefined : (categoryId || undefined);
 
     try {
       await createBudgetAction({
         name,
-        amount: Number(amount),
+        amount: amt,
         categoryId: selectedCatId,
         period,
         startDate,
@@ -112,6 +128,43 @@ export default function BudgetPage() {
       loadData();
     } catch {
       toast.error("Gagal membuat budget");
+    }
+  }
+
+  function handleStartEdit(b: Budget) {
+    setEditingId(b.id);
+    setEditName(b.name);
+    setEditAmount(formatNumberWithDots(b.amount));
+    setEditCategoryId(b.categoryId || "all_categories");
+    setEditPeriod(b.period || "monthly");
+    setOpenEdit(true);
+  }
+
+  async function handleUpdate() {
+    const amt = parseCurrencyInput(editAmount);
+    if (!editName.trim() || !amt) {
+      toast.error("Nama dan nominal budget wajib diisi");
+      return;
+    }
+
+    const { startDate, endDate } = calculateDates(editPeriod);
+    const selectedCatId = editCategoryId === "all_categories" ? undefined : (editCategoryId || undefined);
+
+    try {
+      await updateBudgetAction(editingId, {
+        name: editName,
+        amount: amt,
+        categoryId: selectedCatId,
+        period: editPeriod,
+        startDate,
+        endDate,
+      });
+
+      toast.success("Budget berhasil diperbarui!");
+      setOpenEdit(false);
+      loadData();
+    } catch {
+      toast.error("Gagal memperbarui budget");
     }
   }
 
@@ -248,14 +301,24 @@ export default function BudgetPage() {
                     />
                     {b.name}
                   </CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                    onClick={() => handleDelete(b.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      onClick={() => handleStartEdit(b)}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleDelete(b.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div>
@@ -294,6 +357,70 @@ export default function BudgetPage() {
           })}
         </div>
       )}
+
+      {/* Edit Budget Modal */}
+      <Dialog open={openEdit} onOpenChange={setOpenEdit}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Budget</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Nama Budget</Label>
+              <Input
+                placeholder="Misal: Belanja Bulanan"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Batas Pengeluaran (Rp)</Label>
+              <Input
+                type="text"
+                placeholder="2.000.000"
+                value={editAmount}
+                onChange={(e) => setEditAmount(formatNumberWithDots(e.target.value))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Kategori Spesifik (Opsional)</Label>
+              <Select value={editCategoryId} onValueChange={(val) => val && setEditCategoryId(val)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Semua Kategori Pengeluaran">
+                    {editCategoryId === "all_categories" || !editCategoryId
+                      ? "Semua Kategori Pengeluaran"
+                      : categories.find((c) => c.id === editCategoryId)?.name}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all_categories">Semua Kategori Pengeluaran</SelectItem>
+                  {categories.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Periode</Label>
+              <Select value={editPeriod} onValueChange={(val) => val && setEditPeriod(val)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="weekly">Mingguan</SelectItem>
+                  <SelectItem value="monthly">Bulanan</SelectItem>
+                  <SelectItem value="yearly">Tahunan</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={handleUpdate}>Simpan Perubahan</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
