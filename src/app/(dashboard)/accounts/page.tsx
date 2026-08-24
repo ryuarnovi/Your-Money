@@ -145,7 +145,7 @@ export default function AccountsPage() {
   const [editName, setEditName] = useState("");
   const [editType, setEditType] = useState<"cash" | "bank" | "emoney">("bank");
   const [editAccountNumber, setEditAccountNumber] = useState("");
-  const [editInitialBalance, setEditInitialBalance] = useState("");
+  const [editBalance, setEditBalance] = useState("");
   const [editColor, setEditColor] = useState("#3b82f6");
 
   function handleStartEdit(w: WalletItem) {
@@ -153,7 +153,7 @@ export default function AccountsPage() {
     setEditName(w.name);
     setEditType(w.type);
     setEditAccountNumber(w.accountNumber || "");
-    setEditInitialBalance(formatNumberWithDots(w.initialBalance));
+    setEditBalance(formatNumberWithDots(w.currentBalance));
     setEditColor(w.color || "#3b82f6");
     setOpenEdit(true);
   }
@@ -165,11 +165,16 @@ export default function AccountsPage() {
     }
 
     try {
+      const editingWallet = wallets.find((w) => w.id === editingId);
+      const desiredCurrentBalance = parseCurrencyInput(editBalance);
+      const netOffset = editingWallet ? editingWallet.currentBalance - editingWallet.initialBalance : 0;
+      const newInitialBalance = desiredCurrentBalance - netOffset;
+
       await updateWalletAction(editingId, {
         name: editName,
         type: editType,
         accountNumber: editAccountNumber.trim() || undefined,
-        initialBalance: parseCurrencyInput(editInitialBalance),
+        initialBalance: newInitialBalance,
         color: editColor,
       });
 
@@ -287,7 +292,12 @@ export default function AccountsPage() {
                   <Label>Akun Asal (Sumber)</Label>
                   <Select value={fromWalletId} onValueChange={(val) => val && setFromWalletId(val)}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Pilih akun asal" />
+                      <SelectValue placeholder="Pilih akun asal">
+                        {(() => {
+                          const w = wallets.find((item) => item.id === fromWalletId);
+                          return w ? `${w.name} (${formatCurrency(w.currentBalance)})` : "Pilih akun asal";
+                        })()}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {wallets.map((w) => (
@@ -303,7 +313,12 @@ export default function AccountsPage() {
                   <Label>Akun Tujuan (Penerima)</Label>
                   <Select value={toWalletId} onValueChange={(val) => val && setToWalletId(val)}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Pilih akun tujuan" />
+                      <SelectValue placeholder="Pilih akun tujuan">
+                        {(() => {
+                          const w = wallets.find((item) => item.id === toWalletId);
+                          return w ? `${w.name} (${formatCurrency(w.currentBalance)})` : "Pilih akun tujuan";
+                        })()}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {wallets
@@ -613,12 +628,12 @@ export default function AccountsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Saldo Awal (Rp)</Label>
+              <Label>Saldo Saat Ini (Rp)</Label>
               <Input
                 type="text"
                 placeholder="1.000.000"
-                value={editInitialBalance}
-                onChange={(e) => setEditInitialBalance(formatNumberWithDots(e.target.value))}
+                value={editBalance}
+                onChange={(e) => setEditBalance(formatNumberWithDots(e.target.value))}
               />
             </div>
 
