@@ -137,6 +137,18 @@ export async function addToSavingGoalAction(id: string, amount: number) {
   return { success: true };
 }
 
+export async function spendFromSavingGoalAction(id: string, amount: number, paymentMethod = "bank", description?: string) {
+  const userId = await getSessionUserId();
+  await savingRepo.spendFromSavingGoal(id, userId, amount, paymentMethod, description);
+
+  revalidatePath("/savings");
+  revalidatePath("/dashboard");
+  revalidatePath("/transactions");
+  revalidatePath("/accounts");
+
+  return { success: true };
+}
+
 export async function deleteSavingGoalAction(id: string) {
   const userId = await getSessionUserId();
   await savingRepo.deleteSavingGoal(id, userId);

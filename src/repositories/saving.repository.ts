@@ -100,6 +100,40 @@ export async function addToSavingGoal(id: string, userId: string, amount: number
   );
 }
 
+export async function spendFromSavingGoal(
+  id: string,
+  userId: string,
+  amount: number,
+  paymentMethod: string = "bank",
+  description?: string
+) {
+  const goal = await getSavingGoalById(id, userId);
+  if (!goal) throw new Error("Target tabungan tidak ditemukan.");
+
+  const newAmount = Math.max(0, goal.currentAmount - amount);
+  await executeQuery(
+    "UPDATE saving_goals SET current_amount = ? WHERE id = ? AND user_id = ?",
+    [newAmount, id, userId]
+  );
+
+  const { createTransaction } = await import("./transaction.repository");
+  const { getCategories } = await import("./category.repository");
+  const categories = await getCategories(userId, "expense");
+  const cat = categories.find((c) => c.name.toLowerCase().includes("kuliah") || c.name.toLowerCase().includes("pendidikan")) || categories[0];
+
+  await createTransaction({
+    userId,
+    amount,
+    type: "expense",
+    categoryId: cat?.id,
+    paymentMethod,
+    description: description || `Pembayaran dari Tabungan (${goal.name})`,
+    date: new Date(),
+  });
+
+  return newAmount;
+}
+
 export async function deleteSavingGoal(id: string, userId: string) {
   await executeQuery(
     "DELETE FROM saving_goals WHERE id = ? AND user_id = ?",
