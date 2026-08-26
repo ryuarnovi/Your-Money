@@ -22,6 +22,7 @@ import {
   mergeDuplicateTransactionsAction,
 } from "@/actions/transaction.actions";
 import { getCategoriesAction } from "@/actions/crud.actions";
+import { getWalletsAction } from "@/actions/wallet.actions";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { MoneyInput } from "@/components/ui/money-input";
 import { toast } from "sonner";
@@ -31,6 +32,14 @@ interface Category {
   id: string;
   name: string;
   type: string;
+}
+
+interface Wallet {
+  id: string;
+  name: string;
+  type: "cash" | "bank" | "emoney";
+  currentBalance: number;
+  isDefault?: boolean;
 }
 
 interface Transaction {
@@ -54,6 +63,8 @@ interface DuplicateGroup {
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [selectedWalletId, setSelectedWalletId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [openCreate, setOpenCreate] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -80,15 +91,24 @@ export default function TransactionsPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const [txRes, catRes] = await Promise.all([
+      const [txRes, catRes, walRes] = await Promise.all([
         getTransactionsAction({
           type: filterType !== "all" ? (filterType as any) : undefined,
           search: search || undefined,
         }),
         getCategoriesAction(),
+        getWalletsAction(),
       ]);
       setTransactions(txRes.data as Transaction[]);
       setCategories(catRes as Category[]);
+      const loadedWallets = (walRes as Wallet[]) || [];
+      setWallets(loadedWallets);
+
+      if (loadedWallets.length > 0 && !selectedWalletId) {
+        const def = loadedWallets.find((w) => w.isDefault) || loadedWallets[0];
+        setSelectedWalletId(def.id);
+        setPaymentMethod(def.type as PaymentMethod);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -104,7 +124,14 @@ export default function TransactionsPage() {
     setAmount("");
     setType("expense");
     setCategoryId("");
-    setPaymentMethod("cash");
+    if (wallets.length > 0) {
+      const def = wallets.find((w) => w.isDefault) || wallets[0];
+      setSelectedWalletId(def.id);
+      setPaymentMethod(def.type as PaymentMethod);
+    } else {
+      setPaymentMethod("cash");
+      setSelectedWalletId("");
+    }
     setDescription("");
     setDate(new Date().toISOString().split("T")[0]);
     setEditingTransaction(null);
@@ -118,6 +145,14 @@ export default function TransactionsPage() {
     setPaymentMethod(t.paymentMethod);
     setDescription(t.description || "");
     setDate(new Date(t.date).toISOString().split("T")[0]);
+
+    const tDesc = (t.description || "").toLowerCase();
+    const matchedW = wallets.find(
+      (w) => tDesc.includes(w.name.toLowerCase()) || w.type === t.paymentMethod
+    );
+    if (matchedW) {
+      setSelectedWalletId(matchedW.id);
+    }
   }
 
   async function handleCreate(force = false) {
@@ -127,13 +162,20 @@ export default function TransactionsPage() {
     }
 
     try {
+      const chosenWallet = wallets.find((w) => w.id === selectedWalletId);
+      let finalDescription = description.trim();
+      if (chosenWallet && !finalDescription.toLowerCase().includes(chosenWallet.name.toLowerCase())) {
+        finalDescription = finalDescription ? `${finalDescription} (${chosenWallet.name})` : chosenWallet.name;
+      }
+      const finalPaymentMethod = chosenWallet ? (chosenWallet.type as PaymentMethod) : paymentMethod;
+
       const res = await createTransactionAction(
         {
           amount: Number(amount),
           type,
           categoryId: categoryId || undefined,
-          paymentMethod,
-          description,
+          paymentMethod: finalPaymentMethod,
+          description: finalDescription,
           date: new Date(date),
         },
         { force }
@@ -186,12 +228,19 @@ export default function TransactionsPage() {
     }
 
     try {
+      const chosenWallet = wallets.find((w) => w.id === selectedWalletId);
+      let finalDescription = description.trim();
+      if (chosenWallet && !finalDescription.toLowerCase().includes(chosenWallet.name.toLowerCase())) {
+        finalDescription = finalDescription ? `${finalDescription} (${chosenWallet.name})` : chosenWallet.name;
+      }
+      const finalPaymentMethod = chosenWallet ? (chosenWallet.type as PaymentMethod) : paymentMethod;
+
       await updateTransactionAction(editingTransaction.id, {
         amount: Number(amount),
         type,
         categoryId,
-        paymentMethod,
-        description,
+        paymentMethod: finalPaymentMethod,
+        description: finalDescription,
         date: new Date(date),
       });
 
@@ -313,19 +362,37 @@ export default function TransactionsPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Metode Pembayaran</Label>
-                  <Select value={paymentMethod} onValueChange={(val) => val && setPaymentMethod(val as any)}>
+                  <Label>Rekening / Dompet Asal</Label>
+                  <Select
+                    value={selectedWalletId}
+                    onValueChange={(val) => {
+                      if (val) {
+                        setSelectedWalletId(val);
+                        const w = wallets.find((item) => item.id === val);
+                        if (w) setPaymentMethod(w.type as PaymentMethod);
+                      }
+                    }}
+                  >
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Pilih Rekening / Dompet" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="cash">Cash</SelectItem>
-                      <SelectItem value="bank">Bank Transfer</SelectItem>
-                      <SelectItem value="qris">QRIS</SelectItem>
-                      <SelectItem value="dana">Dana</SelectItem>
-                      <SelectItem value="ovo">OVO</SelectItem>
-                      <SelectItem value="gopay">GoPay</SelectItem>
-                      <SelectItem value="shopeepay">ShopeePay</SelectItem>
+                      {wallets.length === 0 ? (
+                        <SelectItem value="cash">💵 Cash (Default)</SelectItem>
+                      ) : (
+                        wallets.map((w) => (
+                          <SelectItem key={w.id} value={w.id}>
+                            <div className="flex items-center justify-between w-full gap-2">
+                              <span>
+                                {w.type === "cash" ? "💵" : w.type === "bank" ? "🏦" : "📱"} {w.name}
+                              </span>
+                              <span className="text-xs text-muted-foreground font-mono font-medium">
+                                ({formatCurrency(w.currentBalance)})
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -402,19 +469,37 @@ export default function TransactionsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Metode Pembayaran</Label>
-              <Select value={paymentMethod} onValueChange={(val) => val && setPaymentMethod(val as any)}>
+              <Label>Rekening / Dompet Asal</Label>
+              <Select
+                value={selectedWalletId}
+                onValueChange={(val) => {
+                  if (val) {
+                    setSelectedWalletId(val);
+                    const w = wallets.find((item) => item.id === val);
+                    if (w) setPaymentMethod(w.type as PaymentMethod);
+                  }
+                }}
+              >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Pilih Rekening / Dompet" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="cash">Cash</SelectItem>
-                  <SelectItem value="bank">Bank Transfer</SelectItem>
-                  <SelectItem value="qris">QRIS</SelectItem>
-                  <SelectItem value="dana">Dana</SelectItem>
-                  <SelectItem value="ovo">OVO</SelectItem>
-                  <SelectItem value="gopay">GoPay</SelectItem>
-                  <SelectItem value="shopeepay">ShopeePay</SelectItem>
+                  {wallets.length === 0 ? (
+                    <SelectItem value="cash">💵 Cash (Default)</SelectItem>
+                  ) : (
+                    wallets.map((w) => (
+                      <SelectItem key={w.id} value={w.id}>
+                        <div className="flex items-center justify-between w-full gap-2">
+                          <span>
+                            {w.type === "cash" ? "💵" : w.type === "bank" ? "🏦" : "📱"} {w.name}
+                          </span>
+                          <span className="text-xs text-muted-foreground font-mono font-medium">
+                            ({formatCurrency(w.currentBalance)})
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
