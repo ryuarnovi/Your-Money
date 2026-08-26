@@ -71,16 +71,13 @@ export default function TransactionsPage() {
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
 
-  // Duplicate Modal states
   const [openDuplicatesModal, setOpenDuplicatesModal] = useState(false);
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([]);
   const [scanningDuplicates, setScanningDuplicates] = useState(false);
 
-  // Duplicate Warning Modal states
   const [openWarningModal, setOpenWarningModal] = useState(false);
   const [existingDuplicate, setExistingDuplicate] = useState<Transaction | null>(null);
 
-  // Form states for create/edit
   const [amount, setAmount] = useState("");
   const [type, setType] = useState<"income" | "expense" | "transfer">("expense");
   const [categoryId, setCategoryId] = useState("");
@@ -349,10 +346,30 @@ export default function TransactionsPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="expense">🔴 Pengeluaran (Expense)</SelectItem>
-                      <SelectItem value="income">🟢 Pemasukan (Income)</SelectItem>
-                      <SelectItem value="transfer">⇄ Transfer Antar Rekening</SelectItem>
-                      <SelectItem value="allocation">🔒 Alokasi Tabungan / Goal</SelectItem>
+                      <SelectItem value="expense">
+                        <div className="flex items-center gap-2">
+                          <ArrowDownRight className="h-4 w-4 text-destructive" />
+                          <span>Pengeluaran (Expense)</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="income">
+                        <div className="flex items-center gap-2">
+                          <ArrowUpRight className="h-4 w-4 text-emerald-500" />
+                          <span>Pemasukan (Income)</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="transfer">
+                        <div className="flex items-center gap-2">
+                          <RefreshCw className="h-4 w-4 text-blue-500" />
+                          <span>Transfer Antar Rekening</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="allocation">
+                        <div className="flex items-center gap-2">
+                          <Layers className="h-4 w-4 text-amber-500" />
+                          <span>Alokasi Tabungan / Goal</span>
+                        </div>
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -461,9 +478,24 @@ export default function TransactionsPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="expense">Pengeluaran (-)</SelectItem>
-                  <SelectItem value="income">Pemasukan (+)</SelectItem>
-                  <SelectItem value="transfer">Transfer (⇄)</SelectItem>
+                  <SelectItem value="expense">
+                    <div className="flex items-center gap-2">
+                      <ArrowDownRight className="h-4 w-4 text-destructive" />
+                      <span>Pengeluaran (Expense)</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="income">
+                    <div className="flex items-center gap-2">
+                      <ArrowUpRight className="h-4 w-4 text-emerald-500" />
+                      <span>Pemasukan (Income)</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="transfer">
+                    <div className="flex items-center gap-2">
+                      <RefreshCw className="h-4 w-4 text-blue-500" />
+                      <span>Transfer Antar Rekening</span>
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
