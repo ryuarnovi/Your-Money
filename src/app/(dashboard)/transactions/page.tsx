@@ -382,14 +382,7 @@ export default function TransactionsPage() {
                       ) : (
                         wallets.map((w) => (
                           <SelectItem key={w.id} value={w.id}>
-                            <div className="flex items-center justify-between w-full gap-2">
-                              <span>
-                                {w.type === "cash" ? "💵" : w.type === "bank" ? "🏦" : "📱"} {w.name}
-                              </span>
-                              <span className="text-xs text-muted-foreground font-mono font-medium">
-                                ({formatCurrency(w.currentBalance)})
-                              </span>
-                            </div>
+                            {w.type === "cash" ? "💵" : w.type === "bank" ? "🏦" : "📱"} {w.name} ({formatCurrency(w.currentBalance)})
                           </SelectItem>
                         ))
                       )}
@@ -489,14 +482,7 @@ export default function TransactionsPage() {
                   ) : (
                     wallets.map((w) => (
                       <SelectItem key={w.id} value={w.id}>
-                        <div className="flex items-center justify-between w-full gap-2">
-                          <span>
-                            {w.type === "cash" ? "💵" : w.type === "bank" ? "🏦" : "📱"} {w.name}
-                          </span>
-                          <span className="text-xs text-muted-foreground font-mono font-medium">
-                            ({formatCurrency(w.currentBalance)})
-                          </span>
-                        </div>
+                        {w.type === "cash" ? "💵" : w.type === "bank" ? "🏦" : "📱"} {w.name} ({formatCurrency(w.currentBalance)})
                       </SelectItem>
                     ))
                   )}
