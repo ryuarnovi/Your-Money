@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Search, Filter, Trash2, Edit2, ArrowUpRight, ArrowDownRight, FileSpreadsheet, Download, RefreshCw, Layers, AlertTriangle } from "lucide-react";
+import { Plus, Search, Filter, Trash2, Edit2, ArrowUpRight, ArrowDownRight, FileSpreadsheet, Download, RefreshCw, Layers, AlertTriangle, Wallet as WalletIcon, Building2, Smartphone } from "lucide-react";
 import { formatCurrency, formatDate } from "@/utils";
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from "@/types";
 import {
@@ -87,6 +87,26 @@ export default function TransactionsPage() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+
+  function getWalletIcon(wType: string) {
+    if (wType === "cash") return <WalletIcon className="h-4 w-4 text-emerald-500 shrink-0" />;
+    if (wType === "bank") return <Building2 className="h-4 w-4 text-blue-500 shrink-0" />;
+    return <Smartphone className="h-4 w-4 text-purple-500 shrink-0" />;
+  }
+
+  function renderSelectedWalletTrigger() {
+    const w = wallets.find((item) => item.id === selectedWalletId);
+    if (!w) return <SelectValue placeholder="Pilih Rekening / Dompet" />;
+    return (
+      <div className="flex items-center gap-2 overflow-hidden text-sm w-full">
+        {getWalletIcon(w.type)}
+        <span className="font-medium truncate">{w.name}</span>
+        <span className="text-xs text-muted-foreground ml-auto font-mono font-normal">
+          ({formatCurrency(w.currentBalance)})
+        </span>
+      </div>
+    );
+  }
 
   async function loadData() {
     setLoading(true);
@@ -373,16 +393,27 @@ export default function TransactionsPage() {
                       }
                     }}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Pilih Rekening / Dompet" />
+                    <SelectTrigger className="w-full">
+                      {renderSelectedWalletTrigger()}
                     </SelectTrigger>
                     <SelectContent>
                       {wallets.length === 0 ? (
-                        <SelectItem value="cash">💵 Cash (Default)</SelectItem>
+                        <SelectItem value="cash">
+                          <div className="flex items-center gap-2">
+                            <WalletIcon className="h-4 w-4 text-emerald-500" />
+                            <span>Cash (Default)</span>
+                          </div>
+                        </SelectItem>
                       ) : (
                         wallets.map((w) => (
                           <SelectItem key={w.id} value={w.id}>
-                            {w.type === "cash" ? "💵" : w.type === "bank" ? "🏦" : "📱"} {w.name} ({formatCurrency(w.currentBalance)})
+                            <div className="flex items-center gap-2 w-full">
+                              {getWalletIcon(w.type)}
+                              <span className="font-medium">{w.name}</span>
+                              <span className="text-xs text-muted-foreground font-mono ml-auto">
+                                ({formatCurrency(w.currentBalance)})
+                              </span>
+                            </div>
                           </SelectItem>
                         ))
                       )}
@@ -473,16 +504,27 @@ export default function TransactionsPage() {
                   }
                 }}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Pilih Rekening / Dompet" />
+                <SelectTrigger className="w-full">
+                  {renderSelectedWalletTrigger()}
                 </SelectTrigger>
                 <SelectContent>
                   {wallets.length === 0 ? (
-                    <SelectItem value="cash">💵 Cash (Default)</SelectItem>
+                    <SelectItem value="cash">
+                      <div className="flex items-center gap-2">
+                        <WalletIcon className="h-4 w-4 text-emerald-500" />
+                        <span>Cash (Default)</span>
+                      </div>
+                    </SelectItem>
                   ) : (
                     wallets.map((w) => (
                       <SelectItem key={w.id} value={w.id}>
-                        {w.type === "cash" ? "💵" : w.type === "bank" ? "🏦" : "📱"} {w.name} ({formatCurrency(w.currentBalance)})
+                        <div className="flex items-center gap-2 w-full">
+                          {getWalletIcon(w.type)}
+                          <span className="font-medium">{w.name}</span>
+                          <span className="text-xs text-muted-foreground font-mono ml-auto">
+                            ({formatCurrency(w.currentBalance)})
+                          </span>
+                        </div>
                       </SelectItem>
                     ))
                   )}
