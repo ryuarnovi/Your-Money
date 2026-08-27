@@ -218,14 +218,14 @@ export async function getDashboardCombinedAction() {
     },
     // 4. Saving goals
     { sql: "SELECT * FROM saving_goals WHERE user_id = ? ORDER BY is_completed ASC, created_at DESC", params: [userId] },
-    // 5. Upcoming bills
+    // 5. Active recurring bills (fetches all active bills for Tagihan widget & Pie Chart breakdown)
     {
       sql: `SELECT rb.*, c.name as category_name, c.icon as category_icon, c.color as category_color
             FROM recurring_bills rb
             LEFT JOIN categories c ON rb.category_id = c.id
-            WHERE rb.user_id = ? AND rb.is_active = 1 AND rb.next_due_date <= ?
+            WHERE rb.user_id = ? AND rb.is_active = 1
             ORDER BY rb.next_due_date ASC`,
-      params: [userId, future7Days],
+      params: [userId],
     },
     // 6. Expense category breakdown (uses LEFT JOIN so uncategorized expenses are not dropped)
     {
