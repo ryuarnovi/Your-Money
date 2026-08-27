@@ -337,3 +337,131 @@ export async function getDashboardCombinedAction() {
     expenseCategories,
   };
 }
+
+export async function getAnalyticsDataAction(period = "month") {
+  const userId = await getSessionUserId();
+  const { executeBatch } = await import("@/db/client");
+
+  const now = new Date();
+  let startDate: Date;
+  let endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+
+  if (period === "year") {
+    startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0);
+  } else if (period === "last30") {
+    startDate = new Date(now.getTime() - 30 * 86400 * 1000);
+  } else {
+    startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+  }
+
+  const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0);
+  const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+
+  const startTs = Math.floor(startDate.getTime() / 1000);
+  const endTs = Math.floor(endDate.getTime() / 1000);
+  const prevStartTs = Math.floor(prevMonthStart.getTime() / 1000);
+  const prevEndTs = Math.floor(prevMonthEnd.getTime() / 1000);
+
+  const results = await executeBatch([
+    { sql: "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE user_id = ? AND type = 'income' AND date >= ? AND date <= ?", params: [userId, startTs, endTs] },
+    { sql: "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE user_id = ? AND type = 'expense' AND date >= ? AND date <= ?", params: [userId, startTs, endTs] },
+    { sql: "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE user_id = ? AND type = 'expense' AND date >= ? AND date <= ?", params: [userId, prevStartTs, prevEndTs] },
+    { sql: "SELECT COUNT(*) as count FROM transactions WHERE user_id = ? AND type = 'expense' AND date >= ? AND date <= ?", params: [userId, startTs, endTs] },
+    {
+      sql: `SELECT COALESCE(c.name, 'Tanpa Kategori') as name, COALESCE(c.color, '#94a3b8') as color, SUM(t.amount) as total, COUNT(*) as tx_count
+            FROM transactions t
+            LEFT JOIN categories c ON t.category_id = c.id
+            WHERE t.user_id = ? AND t.type = 'expense' AND t.date >= ? AND t.date <= ?
+            GROUP BY c.id, c.name, c.color
+            ORDER BY total DESC`,
+      params: [userId, startTs, endTs],
+    },
+    {
+      sql: `SELECT COALESCE(c.name, 'Tanpa Kategori') as name, COALESCE(c.color, '#10b981') as color, SUM(t.amount) as total
+            FROM transactions t
+            LEFT JOIN categories c ON t.category_id = c.id
+            WHERE t.user_id = ? AND t.type = 'income' AND t.date >= ? AND t.date <= ?
+            GROUP BY c.id, c.name, c.color
+            ORDER BY total DESC`,
+      params: [userId, startTs, endTs],
+    },
+    {
+      sql: `SELECT rb.name, rb.amount, c.name as category_name, c.color as category_color
+            FROM recurring_bills rb
+            LEFT JOIN categories c ON rb.category_id = c.id
+            WHERE rb.user_id = ? AND rb.is_active = 1`,
+      params: [userId],
+    },
+  ]);
+
+  const incomeTotal = (results[0].results[0] as any)?.total || 0;
+  const expenseTotal = (results[1].results[0] as any)?.total || 0;
+  const prevMonthExpense = (results[2].results[0] as any)?.total || 0;
+  const expenseTxCount = (results[3].results[0] as any)?.count || 0;
+
+  const expCatRows = results[4].results as any[];
+  const billRows = results[6].results as any[];
+
+  const expMap = new Map<string, { name: string; color: string; total: number; count: number }>();
+  for (const r of expCatRows) {
+    const name = r.name || "Tanpa Kategori";
+    const color = r.color || "#94a3b8";
+    expMap.set(name, { name, color, total: Number(r.total || 0), count: Number(r.tx_count || 1) });
+  }
+
+  for (const b of billRows) {
+    const catName = b.category_name || "Tagihan (Bills)";
+    const catColor = b.category_color || "#f59e0b";
+    const existing = expMap.get(catName);
+    if (existing) {
+      existing.total += Number(b.amount || 0);
+      existing.count += 1;
+    } else {
+      expMap.set(catName, { name: catName, color: catColor, total: Number(b.amount || 0), count: 1 });
+    }
+  }
+
+  const combinedExpCategories = Array.from(expMap.values()).sort((a, b) => b.total - a.total);
+  const grandTotalExp = combinedExpCategories.reduce((sum, r) => sum + r.total, 0);
+
+  const expenseCategories = combinedExpCategories.map((r) => ({
+    name: r.name,
+    value: r.total,
+    color: r.color || "#6366f1",
+    count: r.count,
+    percentage: grandTotalExp > 0 ? (r.total / grandTotalExp) * 100 : 0,
+  }));
+
+  const incCatRows = results[5].results as any[];
+  const grandTotalInc = incCatRows.reduce((sum, r) => sum + Number(r.total || 0), 0);
+  const incomeCategories = incCatRows.map((r) => ({
+    name: r.name || "Tanpa Kategori",
+    value: Number(r.total || 0),
+    color: r.color || "#10b981",
+    percentage: grandTotalInc > 0 ? (Number(r.total || 0) / grandTotalInc) * 100 : 0,
+  }));
+
+  const daysInPeriod = period === "year" ? 365 : 30;
+  const dailyAverage = grandTotalExp / daysInPeriod;
+  const avgPerTx = expenseTxCount > 0 ? expenseTotal / expenseTxCount : 0;
+  const netCashflow = incomeTotal - grandTotalExp;
+  const savingsRate = incomeTotal > 0 ? Math.max(0, (netCashflow / incomeTotal) * 100) : 0;
+
+  const momExpenseChange = prevMonthExpense > 0
+    ? ((grandTotalExp - prevMonthExpense) / prevMonthExpense) * 100
+    : 0;
+
+  return {
+    incomeTotal,
+    expenseTotal: grandTotalExp,
+    prevMonthExpense,
+    netCashflow,
+    savingsRate,
+    dailyAverage,
+    avgPerTx,
+    expenseTxCount,
+    momExpenseChange,
+    expenseCategories,
+    incomeCategories,
+  };
+}
