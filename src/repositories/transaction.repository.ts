@@ -385,42 +385,13 @@ export async function getCategoryBreakdown(userId: string, type: string, startDa
     params
   );
 
-  const catMap = new Map<string, { name: string; color: string; total: number }>();
-  for (const r of rows) {
-    const catName = r.name || "Tanpa Kategori";
-    const catColor = r.color || "#94a3b8";
-    catMap.set(catName, { name: catName, color: catColor, total: Number(r.total || 0) });
-  }
+  const grandTotal = rows.reduce((sum, r) => sum + Number(r.total || 0), 0);
 
-  if (type === "expense") {
-    const billRows = await queryAll<{ name: string; amount: number; category_name: string | null; category_color: string | null }>(
-      `SELECT rb.name, rb.amount, c.name as category_name, c.color as category_color
-       FROM recurring_bills rb
-       LEFT JOIN categories c ON rb.category_id = c.id
-       WHERE rb.user_id = ? AND rb.is_active = 1`,
-      [userId]
-    );
-
-    for (const b of billRows) {
-      const catName = b.category_name || "Tagihan (Bills)";
-      const catColor = b.category_color || "#f59e0b";
-      const existing = catMap.get(catName);
-      if (existing) {
-        existing.total += Number(b.amount || 0);
-      } else {
-        catMap.set(catName, { name: catName, color: catColor, total: Number(b.amount || 0) });
-      }
-    }
-  }
-
-  const combinedRows = Array.from(catMap.values()).sort((a, b) => b.total - a.total);
-  const grandTotal = combinedRows.reduce((sum, r) => sum + r.total, 0);
-
-  return combinedRows.map((row) => ({
-    name: row.name,
-    value: row.total,
+  return rows.map((row) => ({
+    name: row.name || "Tanpa Kategori",
+    value: Number(row.total || 0),
     color: row.color || "#6366f1",
-    percentage: grandTotal > 0 ? (row.total / grandTotal) * 100 : 0,
+    percentage: grandTotal > 0 ? (Number(row.total || 0) / grandTotal) * 100 : 0,
   }));
 }
 

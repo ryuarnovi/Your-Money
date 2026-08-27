@@ -290,32 +290,12 @@ export async function getDashboardCombinedAction() {
   });
 
   const catRows = results[6].results as any[];
-  const catMap = new Map<string, { name: string; color: string; total: number }>();
-  for (const r of catRows) {
-    const catName = r.name || "Tanpa Kategori";
-    const catColor = r.color || "#94a3b8";
-    catMap.set(catName, { name: catName, color: catColor, total: Number(r.total || 0) });
-  }
-
-  for (const b of billsRaw) {
-    const catName = b.category_name || "Tagihan (Bills)";
-    const catColor = b.category_color || "#f59e0b";
-    const existing = catMap.get(catName);
-    if (existing) {
-      existing.total += Number(b.amount || 0);
-    } else {
-      catMap.set(catName, { name: catName, color: catColor, total: Number(b.amount || 0) });
-    }
-  }
-
-  const combinedCategories = Array.from(catMap.values()).sort((a, b) => b.total - a.total);
-  const grandTotal = combinedCategories.reduce((sum, r) => sum + r.total, 0);
-
-  const expenseCategories = combinedCategories.map((r) => ({
-    name: r.name,
-    value: r.total,
+  const grandTotal = catRows.reduce((sum, r) => sum + Number(r.total || 0), 0);
+  const expenseCategories = catRows.map((r) => ({
+    name: r.name || "Tanpa Kategori",
+    value: Number(r.total || 0),
     color: r.color || "#6366f1",
-    percentage: grandTotal > 0 ? (r.total / grandTotal) * 100 : 0,
+    percentage: grandTotal > 0 ? (Number(r.total || 0) / grandTotal) * 100 : 0,
   }));
 
   const walletStats = await walletRepo.getWalletStats(userId);
@@ -400,36 +380,14 @@ export async function getAnalyticsDataAction(period = "month") {
   const expenseTxCount = (results[3].results[0] as any)?.count || 0;
 
   const expCatRows = results[4].results as any[];
-  const billRows = results[6].results as any[];
+  const grandTotalExp = expCatRows.reduce((sum, r) => sum + Number(r.total || 0), 0);
 
-  const expMap = new Map<string, { name: string; color: string; total: number; count: number }>();
-  for (const r of expCatRows) {
-    const name = r.name || "Tanpa Kategori";
-    const color = r.color || "#94a3b8";
-    expMap.set(name, { name, color, total: Number(r.total || 0), count: Number(r.tx_count || 1) });
-  }
-
-  for (const b of billRows) {
-    const catName = b.category_name || "Tagihan (Bills)";
-    const catColor = b.category_color || "#f59e0b";
-    const existing = expMap.get(catName);
-    if (existing) {
-      existing.total += Number(b.amount || 0);
-      existing.count += 1;
-    } else {
-      expMap.set(catName, { name: catName, color: catColor, total: Number(b.amount || 0), count: 1 });
-    }
-  }
-
-  const combinedExpCategories = Array.from(expMap.values()).sort((a, b) => b.total - a.total);
-  const grandTotalExp = combinedExpCategories.reduce((sum, r) => sum + r.total, 0);
-
-  const expenseCategories = combinedExpCategories.map((r) => ({
-    name: r.name,
-    value: r.total,
+  const expenseCategories = expCatRows.map((r) => ({
+    name: r.name || "Tanpa Kategori",
+    value: Number(r.total || 0),
     color: r.color || "#6366f1",
-    count: r.count,
-    percentage: grandTotalExp > 0 ? (r.total / grandTotalExp) * 100 : 0,
+    count: Number(r.tx_count || 1),
+    percentage: grandTotalExp > 0 ? (Number(r.total || 0) / grandTotalExp) * 100 : 0,
   }));
 
   const incCatRows = results[5].results as any[];
@@ -444,11 +402,11 @@ export async function getAnalyticsDataAction(period = "month") {
   const daysInPeriod = period === "year" ? 365 : period === "last30" ? 30 : Math.max(1, now.getDate());
   const dailyAverage = expenseTotal / daysInPeriod;
   const avgPerTx = expenseTxCount > 0 ? expenseTotal / expenseTxCount : 0;
-  const netCashflow = incomeTotal - grandTotalExp;
+  const netCashflow = incomeTotal - expenseTotal;
   const savingsRate = incomeTotal > 0 ? Math.max(0, (netCashflow / incomeTotal) * 100) : 0;
 
   const momExpenseChange = prevMonthExpense > 0
-    ? ((grandTotalExp - prevMonthExpense) / prevMonthExpense) * 100
+    ? ((expenseTotal - prevMonthExpense) / prevMonthExpense) * 100
     : 0;
 
   return {
