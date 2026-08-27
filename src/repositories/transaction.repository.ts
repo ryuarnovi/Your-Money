@@ -129,12 +129,21 @@ export async function createTransaction(data: {
   const now = Math.floor(Date.now() / 1000);
   const dateTs = Math.floor(data.date.getTime() / 1000);
 
+  let finalCategoryId = data.categoryId;
+  if (!finalCategoryId && data.type !== "transfer") {
+    const { findCategoryByName } = await import("@/repositories/category.repository");
+    const matched = await findCategoryByName(data.description || "Lainnya", data.type);
+    if (matched) {
+      finalCategoryId = matched.id;
+    }
+  }
+
   await executeQuery(
     `INSERT INTO transactions (id, user_id, amount, type, category_id, sub_category_id, payment_method, description, tags, receipt_url, date, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id, data.userId, data.amount, data.type,
-      data.categoryId || null, data.subCategoryId || null,
+      finalCategoryId || null, data.subCategoryId || null,
       data.paymentMethod, data.description || null,
       data.tags || null, data.receiptUrl || null,
       dateTs, now, now,

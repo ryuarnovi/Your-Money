@@ -156,19 +156,85 @@ export async function seedDefaultCategories() {
   }
 }
 
+const SMART_KEYWORD_MAP: Record<string, string[]> = {
+  "Makanan": ["makan", "minum", "kopi", "kafe", "resto", "nasi", "bakso", "sate", "snack", "jajanan", "gofood", "grabfood", "shopeefood", "warung", "martabak", "ayam", "mie"],
+  "Transportasi": ["bensin", "bbm", "pertalite", "pertamax", "parkir", "tol", "gojek", "grab", "angkot", "ojek", "trans", "bus", "servis", "bengkel", "ban", "steam", "cuci", "tambal"],
+  "Pendidikan": ["sks", "semester", "kuliah", "kampus", "sekolah", "spp", "buku", "kursus", "les", "ukt", "wisuda"],
+  "Tagihan": ["listrik", "pln", "air", "pdam", "wifi", "indihome", "biznet", "pulsa", "kuota", "kontrakan", "kos", "bpjs", "pajak"],
+  "Hiburan": ["rokok", "vape", "nonton", "bioskop", "game", "steam", "spotify", "netflix", "jalan-jalan", "hiburan", "liburan", "topup"],
+  "Kesehatan": ["obat", "dokter", "apotek", "rs", "rumah sakit", "vitamin", "skincare", "salon", "pijat"],
+  "Belanja": ["baju", "celana", "sepatu", "pakaian", "belanja", "tokopedia", "shopee", "lazada", "mall", "fashion", "jam"],
+  "Gaji": ["gaji", "salary", "upah", "honor", "paycheck"],
+  "Uang Saku": ["saku", "uang saku", "transfer masuk", "hadiah", "bonus", "cashback", "dikasih"],
+};
+
 export async function findCategoryByName(name: string, type?: string) {
+  const clean = name.toLowerCase().trim();
+
+  // 1. Direct or partial DB match
   const conditions = ["LOWER(name) LIKE LOWER(?)"];
-  const params: unknown[] = [`%${name}%`];
+  const params: unknown[] = [`%${clean}%`];
 
   if (type) {
     conditions.push("type = ?");
     params.push(type);
   }
 
-  return await queryOne<CategoryRow>(
+  const cat = await queryOne<CategoryRow>(
     `SELECT * FROM categories WHERE ${conditions.join(" AND ")} LIMIT 1`,
     params
   );
+
+  if (cat) return mapCategoryRow(cat);
+
+  // 2. Smart Keyword Synonym Mapping
+  for (const [targetCatName, keywords] of Object.entries(SMART_KEYWORD_MAP)) {
+    for (const kw of keywords) {
+      if (clean.includes(kw) || kw.includes(clean)) {
+        const matchConds = ["LOWER(name) LIKE LOWER(?)"];
+        const matchParams: unknown[] = [`%${targetCatName.toLowerCase()}%`];
+        if (type) {
+          matchConds.push("type = ?");
+          matchParams.push(type);
+        }
+        const mapped = await queryOne<CategoryRow>(
+          `SELECT * FROM categories WHERE ${matchConds.join(" AND ")} LIMIT 1`,
+          matchParams
+        );
+        if (mapped) return mapCategoryRow(mapped);
+      }
+    }
+  }
+
+  // 3. Fallback to 'Lainnya' category
+  const fallbackConds = ["(LOWER(name) LIKE '%lain%' OR LOWER(name) LIKE '%umum%')"];
+  const fallbackParams: unknown[] = [];
+  if (type) {
+    fallbackConds.push("type = ?");
+    fallbackParams.push(type);
+  }
+
+  const fallback = await queryOne<CategoryRow>(
+    `SELECT * FROM categories WHERE ${fallbackConds.join(" AND ")} LIMIT 1`,
+    fallbackParams
+  );
+
+  if (fallback) return mapCategoryRow(fallback);
+
+  // 4. Ultimate fallback: return first category of that type
+  const firstConds: string[] = [];
+  const firstParams: unknown[] = [];
+  if (type) {
+    firstConds.push("type = ?");
+    firstParams.push(type);
+  }
+  const whereClause = firstConds.length > 0 ? `WHERE ${firstConds.join(" AND ")}` : "";
+  const first = await queryOne<CategoryRow>(
+    `SELECT * FROM categories ${whereClause} ORDER BY is_default DESC LIMIT 1`,
+    firstParams
+  );
+
+  return first ? mapCategoryRow(first) : null;
 }
 
 function mapCategoryRow(row: CategoryRow) {
