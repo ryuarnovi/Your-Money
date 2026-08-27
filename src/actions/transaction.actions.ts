@@ -441,8 +441,8 @@ export async function getAnalyticsDataAction(period = "month") {
     percentage: grandTotalInc > 0 ? (Number(r.total || 0) / grandTotalInc) * 100 : 0,
   }));
 
-  const daysInPeriod = period === "year" ? 365 : 30;
-  const dailyAverage = grandTotalExp / daysInPeriod;
+  const daysInPeriod = period === "year" ? 365 : period === "last30" ? 30 : Math.max(1, now.getDate());
+  const dailyAverage = expenseTotal / daysInPeriod;
   const avgPerTx = expenseTxCount > 0 ? expenseTotal / expenseTxCount : 0;
   const netCashflow = incomeTotal - grandTotalExp;
   const savingsRate = incomeTotal > 0 ? Math.max(0, (netCashflow / incomeTotal) * 100) : 0;
