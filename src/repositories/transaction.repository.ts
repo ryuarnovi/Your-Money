@@ -375,19 +375,48 @@ export async function getCategoryBreakdown(userId: string, type: string, startDa
     params.push(Math.floor(endDate.getTime() / 1000));
   }
 
-  const rows = await queryAll<{ name: string; color: string; total: number }>(
-    `SELECT c.name, c.color, SUM(t.amount) as total
+  const rows = await queryAll<{ name: string | null; color: string | null; total: number }>(
+    `SELECT COALESCE(c.name, 'Tanpa Kategori') as name, COALESCE(c.color, '#94a3b8') as color, SUM(t.amount) as total
      FROM transactions t
-     JOIN categories c ON t.category_id = c.id
+     LEFT JOIN categories c ON t.category_id = c.id
      WHERE ${conditions.join(" AND ")}
      GROUP BY c.id, c.name, c.color
      ORDER BY total DESC`,
     params
   );
 
-  const grandTotal = rows.reduce((sum, r) => sum + r.total, 0);
+  const catMap = new Map<string, { name: string; color: string; total: number }>();
+  for (const r of rows) {
+    const catName = r.name || "Tanpa Kategori";
+    const catColor = r.color || "#94a3b8";
+    catMap.set(catName, { name: catName, color: catColor, total: Number(r.total || 0) });
+  }
 
-  return rows.map((row) => ({
+  if (type === "expense") {
+    const billRows = await queryAll<{ name: string; amount: number; category_name: string | null; category_color: string | null }>(
+      `SELECT rb.name, rb.amount, c.name as category_name, c.color as category_color
+       FROM recurring_bills rb
+       LEFT JOIN categories c ON rb.category_id = c.id
+       WHERE rb.user_id = ? AND rb.is_active = 1`,
+      [userId]
+    );
+
+    for (const b of billRows) {
+      const catName = b.category_name || "Tagihan (Bills)";
+      const catColor = b.category_color || "#f59e0b";
+      const existing = catMap.get(catName);
+      if (existing) {
+        existing.total += Number(b.amount || 0);
+      } else {
+        catMap.set(catName, { name: catName, color: catColor, total: Number(b.amount || 0) });
+      }
+    }
+  }
+
+  const combinedRows = Array.from(catMap.values()).sort((a, b) => b.total - a.total);
+  const grandTotal = combinedRows.reduce((sum, r) => sum + r.total, 0);
+
+  return combinedRows.map((row) => ({
     name: row.name,
     value: row.total,
     color: row.color || "#6366f1",

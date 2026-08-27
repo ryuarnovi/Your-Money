@@ -227,11 +227,11 @@ export async function getDashboardCombinedAction() {
             ORDER BY rb.next_due_date ASC`,
       params: [userId, future7Days],
     },
-    // 6. Expense category breakdown
+    // 6. Expense category breakdown (uses LEFT JOIN so uncategorized expenses are not dropped)
     {
-      sql: `SELECT c.name, c.color, SUM(t.amount) as total
+      sql: `SELECT COALESCE(c.name, 'Tanpa Kategori') as name, COALESCE(c.color, '#94a3b8') as color, SUM(t.amount) as total
             FROM transactions t
-            JOIN categories c ON t.category_id = c.id
+            LEFT JOIN categories c ON t.category_id = c.id
             WHERE t.user_id = ? AND t.type = 'expense'
             GROUP BY c.id, c.name, c.color
             ORDER BY total DESC`,
@@ -274,7 +274,8 @@ export async function getDashboardCombinedAction() {
     color: row.color || "#10b981",
   }));
 
-  const bills = (results[5].results as any[]).map((row) => {
+  const billsRaw = results[5].results as any[];
+  const bills = billsRaw.map((row) => {
     const dueDate = row.next_due_date * 1000;
     const daysUntilDue = Math.ceil((dueDate - Date.now()) / (1000 * 60 * 60 * 24));
     return {
@@ -289,8 +290,28 @@ export async function getDashboardCombinedAction() {
   });
 
   const catRows = results[6].results as any[];
-  const grandTotal = catRows.reduce((sum, r) => sum + r.total, 0);
-  const expenseCategories = catRows.map((r) => ({
+  const catMap = new Map<string, { name: string; color: string; total: number }>();
+  for (const r of catRows) {
+    const catName = r.name || "Tanpa Kategori";
+    const catColor = r.color || "#94a3b8";
+    catMap.set(catName, { name: catName, color: catColor, total: Number(r.total || 0) });
+  }
+
+  for (const b of billsRaw) {
+    const catName = b.category_name || "Tagihan (Bills)";
+    const catColor = b.category_color || "#f59e0b";
+    const existing = catMap.get(catName);
+    if (existing) {
+      existing.total += Number(b.amount || 0);
+    } else {
+      catMap.set(catName, { name: catName, color: catColor, total: Number(b.amount || 0) });
+    }
+  }
+
+  const combinedCategories = Array.from(catMap.values()).sort((a, b) => b.total - a.total);
+  const grandTotal = combinedCategories.reduce((sum, r) => sum + r.total, 0);
+
+  const expenseCategories = combinedCategories.map((r) => ({
     name: r.name,
     value: r.total,
     color: r.color || "#6366f1",
