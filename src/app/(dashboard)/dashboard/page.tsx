@@ -22,6 +22,10 @@ import {
   Building2,
   Banknote,
   Smartphone,
+  Sparkles,
+  ShieldCheck,
+  AlertTriangle,
+  ArrowRight,
 } from "lucide-react";
 import { formatCurrency, formatCompactCurrency, formatRelativeDate, formatDate } from "@/utils";
 import { getRecentTransactionsAction, getDashboardStatsAction, getCategoryBreakdownAction } from "@/actions/transaction.actions";
@@ -141,9 +145,12 @@ export default function DashboardPage() {
     return <DashboardSkeleton />;
   }
 
-  const totalSaving = goals.reduce((sum, g) => sum + g.currentAmount, 0);
-  const budgetUsed = budgets.reduce((sum, b) => sum + b.spent, 0);
-  const budgetTotal = budgets.reduce((sum, b) => sum + b.amount, 0);
+  const hour = new Date().getHours();
+  const greetingTime = hour < 11 ? "Selamat Pagi" : hour < 15 ? "Selamat Siang" : hour < 18 ? "Selamat Sore" : "Selamat Malam";
+
+  const totalIncome = finSummary?.incomeThisMonth || stats?.totalIncome || 0;
+  const totalExpense = finSummary?.realExpenseThisMonth || stats?.totalExpense || 0;
+  const isHealthy = totalIncome === 0 || (totalExpense / totalIncome) <= 0.75;
 
   return (
     <motion.div
@@ -152,12 +159,27 @@ export default function DashboardPage() {
       animate="show"
       className="space-y-6"
     >
-      {/* Header */}
+      {/* Header with Greeting & Health Score Badge */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">
-            Ringkasan keuanganmu hari ini
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{greetingTime}, Rizki</h1>
+            <Badge variant="outline" className={`text-xs px-2.5 py-0.5 font-medium flex items-center ${isHealthy ? "border-emerald-500/30 text-emerald-600 bg-emerald-500/10" : "border-amber-500/30 text-amber-600 bg-amber-500/10"}`}>
+              {isHealthy ? (
+                <>
+                  <ShieldCheck className="h-3.5 w-3.5 mr-1" />
+                  Keuangan Sehat
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="h-3.5 w-3.5 mr-1" />
+                  Perlu Dipantau
+                </>
+              )}
+            </Badge>
+          </div>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Ringkasan dan analisis kesehatan keuangan hari ini
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -172,7 +194,7 @@ export default function DashboardPage() {
               <SelectItem value="year">Tahun ini</SelectItem>
             </SelectContent>
           </Select>
-          <Link href="/transactions?action=create">
+          <Link href="/transactions">
             <Button size="sm" className="gap-2">
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Transaksi Baru</span>
@@ -180,6 +202,31 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* Smart Financial Insight Card */}
+      <motion.div variants={item}>
+        <Card className="border-indigo-500/30 bg-gradient-to-r from-indigo-500/10 via-purple-500/5 to-emerald-500/10 backdrop-blur-md p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-500 shrink-0">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">Insight Keuangan</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {finSummary && finSummary.realExpenseThisMonth < finSummary.incomeThisMonth
+                  ? `Pengeluaran bulan ini (${formatCurrency(finSummary.realExpenseThisMonth)}) terkendali di bawah total pemasukan (${formatCurrency(finSummary.incomeThisMonth)}). Saldo operasional tersisa ${formatCurrency(finSummary.availableBalance)}.`
+                  : `Pengeluaran bulan ini perlu dipantau. Pastikan alokasi tabungan dan tagihan rutin terlaksana sesuai rencana.`}
+              </p>
+            </div>
+          </div>
+          <Link href="/analytics">
+            <Button variant="outline" size="sm" className="text-xs h-8 whitespace-nowrap shrink-0 border-indigo-500/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 flex items-center gap-1">
+              <span>Analisis Lengkap</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Button>
+          </Link>
+        </Card>
+      </motion.div>
 
       {/* 5 Core Financial Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -284,8 +331,9 @@ export default function DashboardPage() {
                 Alokasi Saldo Akun (Kas, Bank, & E-Money)
               </CardTitle>
               <Link href="/accounts">
-                <Button variant="ghost" size="sm" className="text-xs h-7">
-                  Kelola Akun ➔
+                <Button variant="ghost" size="sm" className="text-xs h-7 flex items-center gap-1">
+                  <span>Kelola Akun</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
                 </Button>
               </Link>
             </CardHeader>
@@ -406,8 +454,51 @@ export default function DashboardPage() {
           </Card>
         </motion.div>
 
-        {/* Budget & Bills */}
+        {/* Budget, Tabungan, & Bills */}
         <motion.div variants={item} className="space-y-4">
+          {/* Target Tabungan (Saving Goals) Status */}
+          <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <PiggyBank className="h-4 w-4 text-emerald-500" />
+                Target Tabungan
+              </CardTitle>
+              <Link href="/savings">
+                <Button variant="ghost" size="sm">Lihat</Button>
+              </Link>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 space-y-3">
+              {goals.length === 0 ? (
+                <EmptyState
+                  icon={PiggyBank}
+                  title="Belum ada tabungan"
+                  description="Mulai alokasikan dana tabungan"
+                  compact
+                />
+              ) : (
+                goals.slice(0, 3).map((goal) => (
+                  <div key={goal.id} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium truncate">{goal.name}</span>
+                      <span className="text-muted-foreground text-xs font-mono font-medium">
+                        {formatCompactCurrency(goal.currentAmount)} / {formatCompactCurrency(goal.targetAmount)} ({Math.round(goal.percentage)}%)
+                      </span>
+                    </div>
+                    <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${Math.min(goal.percentage, 100)}%`,
+                          backgroundColor: goal.color || "#10b981",
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
           {/* Budget Status */}
           <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
