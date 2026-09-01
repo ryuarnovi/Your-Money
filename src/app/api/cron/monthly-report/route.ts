@@ -88,6 +88,22 @@ export async function GET(req: NextRequest) {
         new InputFile(buffer, `Laporan_Bulanan_DuitKu_${new Date().toISOString().split("T")[0]}.xlsx`),
         { caption: "📅 *Laporan Keuangan Bulanan Otomatis DuitKu*", parse_mode: "Markdown" }
       );
+
+      // Perform monthly closing audit & permanently delete raw transactions of past month!
+      const { closeMonthAndAudit } = await import("@/repositories/monthly_audit.repository");
+      const auditRes = await closeMonthAndAudit(u.user_id);
+
+      await bot.api.sendMessage(
+        u.telegram_chat_id,
+        `🔒 *Audit Bulanan (${auditRes.yearMonth}) Berhasil Disimpan*!\n\n` +
+        `• Total Pemasukan: *${formatCurrency(auditRes.totalIncome)}*\n` +
+        `• Total Pengeluaran: *${formatCurrency(auditRes.totalExpense)}*\n` +
+        `• Cashflow Net: *${formatCurrency(auditRes.netCashflow)}*\n` +
+        `• Total Asset Akun: *${formatCurrency(auditRes.totalAssetAtClose)}*\n` +
+        `• Transaksi Dibersihkan: *${auditRes.txCountPurged} transaksi*\n\n` +
+        `💡 *Status*: Rincian transaksi bulan lalu telah dibersihkan secara permanen. Hasil audit bulanan tersimpan aman di menu Laporan!`,
+        { parse_mode: "Markdown" }
+      );
     }
 
     return NextResponse.json({ success: true });

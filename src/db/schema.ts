@@ -244,6 +244,24 @@ export const auditLogs = sqliteTable("audit_logs", {
     .$defaultFn(() => new Date()),
 });
 
+export const monthlyAudits = sqliteTable("monthly_audits", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  yearMonth: text("year_month").notNull(),
+  totalIncome: real("total_income").notNull().default(0),
+  totalExpense: real("total_expense").notNull().default(0),
+  netCashflow: real("net_cashflow").notNull().default(0),
+  totalAssetAtClose: real("total_asset_at_close").notNull().default(0),
+  categoryBreakdownJson: text("category_breakdown_json"),
+  txCountPurged: integer("tx_count_purged").notNull().default(0),
+  closedAt: integer("closed_at", { mode: "timestamp" })
+    .$defaultFn(() => new Date()),
+});
+
 export const emergencyFunds = sqliteTable("emergency_funds", {
   id: text("id")
     .primaryKey()
