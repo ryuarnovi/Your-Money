@@ -83,9 +83,9 @@ async function ensureTablesExist() {
  */
 export async function calculateAutomatedMonthlyExpense(userId: string) {
   const rows = await queryAll<{ month: string; total: number }>(
-    `SELECT strftime('%Y-%m', date, 'unixepoch') as month, SUM(amount) as total
+    `SELECT strftime('%Y-%m', date, 'unixepoch', 'localtime') as month, SUM(amount) as total
      FROM transactions
-     WHERE user_id = ? AND (type IN ('expense', 'transfer') OR category_id IN (SELECT id FROM categories WHERE type = 'expense'))
+     WHERE user_id = ? AND type = 'expense'
      GROUP BY month
      ORDER BY month DESC
      LIMIT 6`,
