@@ -331,11 +331,48 @@ export async function updateWallet(
     type: "cash" | "bank" | "emoney";
     accountNumber: string;
     initialBalance: number;
+    targetBalance: number;
     color: string;
     icon: string;
     isDefault: boolean;
   }>
 ) {
+  // 1. If targetBalance is provided, compute difference and create automatic adjustment transaction!
+  if (data.targetBalance !== undefined) {
+    const allWallets = await getWallets(userId);
+    const existingWallet = allWallets.find((w) => w.id === id);
+
+    if (existingWallet) {
+      const currentBal = existingWallet.currentBalance;
+      const diff = data.targetBalance - currentBal;
+
+      if (diff !== 0) {
+        const walletName = data.name || existingWallet.name;
+        const walletType = data.type || existingWallet.type;
+        const isIncome = diff > 0;
+        const absDiff = Math.abs(diff);
+
+        const { createTransaction } = await import("@/repositories/transaction.repository");
+        const { findCategoryByName } = await import("@/repositories/category.repository");
+
+        const category = await findCategoryByName(
+          isIncome ? "Pemasukan Lain" : "Pengeluaran Lain",
+          isIncome ? "income" : "expense"
+        );
+
+        await createTransaction({
+          userId,
+          amount: absDiff,
+          type: isIncome ? "income" : "expense",
+          categoryId: category?.id,
+          paymentMethod: walletType,
+          description: `Penyesuaian Saldo (${walletName})`,
+          date: new Date(),
+        });
+      }
+    }
+  }
+
   const updates: string[] = [];
   const params: unknown[] = [];
 
@@ -354,14 +391,13 @@ export async function updateWallet(
   updates.push("updated_at = ?");
   params.push(Math.floor(Date.now() / 1000));
 
-  if (updates.length === 1) return;
-
-  params.push(id, userId);
-
-  await executeQuery(
-    `UPDATE wallets SET ${updates.join(", ")} WHERE id = ? AND user_id = ?`,
-    params
-  );
+  if (updates.length > 1) {
+    params.push(id, userId);
+    await executeQuery(
+      `UPDATE wallets SET ${updates.join(", ")} WHERE id = ? AND user_id = ?`,
+      params
+    );
+  }
 }
 
 export async function deleteWallet(id: string, userId: string) {

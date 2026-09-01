@@ -165,16 +165,13 @@ export default function AccountsPage() {
     }
 
     try {
-      const editingWallet = wallets.find((w) => w.id === editingId);
-      const desiredCurrentBalance = parseCurrencyInput(editBalance);
-      const netOffset = editingWallet ? editingWallet.currentBalance - editingWallet.initialBalance : 0;
-      const newInitialBalance = desiredCurrentBalance - netOffset;
+      const desiredBalance = parseCurrencyInput(editBalance);
 
       await updateWalletAction(editingId, {
         name: editName,
         type: editType,
         accountNumber: editAccountNumber.trim() || undefined,
-        initialBalance: newInitialBalance,
+        targetBalance: desiredBalance,
         color: editColor,
       });
 
